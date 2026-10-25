@@ -40,31 +40,28 @@ LAL 95–90 GSW · 4.º P 8:02
 - **Lista sempre limpa**: cada jogador sai sozinho da lista 10 min depois do fim do jogo
 - **Estatísticas anuladas**: aviso quando a NBA retira um cesto, ressalto, etc. (e se a linha deixar de estar batida)
 - **Faltas**: aviso às 4 e 5 faltas e quando o jogador sai à 6.ª
+- **📊 Análise da aposta**: botão na confirmação que gera um gráfico com os últimos 5 jogos e os últimos 5 contra o adversário, com a linha marcada, média, mediana, mín–máx e minutos
+- **Plantéis antes do jogo**: nos jogos por começar mostra os plantéis com lesões (🚑) e deixa escolher jogadores com botões
 - **Multiutilizador**: cada pessoa tem a sua lista; funciona também em grupos
 - Sem barra: basta escrever `jokic ressaltos 11.5`
 
 ## Como usar
 
-Tudo funciona com botões. O menu fica fixo em baixo: **🏀 Jogos de hoje · 📋 A minha lista · ❓ Ajuda**.
+Tudo funciona com botões, sem comandos. O menu fica fixo em baixo:
 
-1. **🏀 Jogos de hoje** → tocas no número do jogo
-2. Vês as stats de todos os jogadores → escolhes a **equipa**
-3. Tocas nos **jogadores** que queres (ficam com ✅; podes trocar de equipa) → **▶️ Seguir**
-4. Para cada jogador: **estatística** → **Over / Under / Sem linha** → escreves a **linha** (ex.: `24.5`)
+**🏀 Jogos de hoje · 🔎 Procurar jogador · 📋 A minha lista · 🧹 Limpar conversa · ❓ Ajuda**
 
-**📋 A minha lista** mostra como está cada aposta (🟢 a jogar, ⏳ por começar, 🏁 terminado) e tem botões para **🔄 Atualizar** e **🗑️ Remover**.
+1. **🏀 Jogos de hoje** → tocas no jogo → escolhes a equipa → tocas nos jogadores (✅) → **▶️ Seguir**
+   (antes do jogo aparecem os plantéis com lesões 🚑; durante o jogo, as stats)
+2. Ou **🔎 Procurar jogador** → escreves o nome (ex.: `lebron`); se houver vários, escolhes num botão
+3. Para cada jogador: **estatística** → **Over / Under / Sem linha** → **linha** com botões −5 −1 −0.5 +0.5 +1 +5,
+   que começa já na média dos últimos 5 jogos (também podes escrever o número)
+4. Na confirmação, **📊 Ver análise** mostra o gráfico dos últimos jogos
 
-Também dá para escrever diretamente:
+**📋 A minha lista** mostra como está cada aposta e tem botões para **🔄 Atualizar** e **🗑️ Remover**.
+**🧹 Limpar conversa** apaga as mensagens mas mantém a lista.
 
-| Mensagem | O que faz |
-|---|---|
-| `lebron` | Pergunta a estatística e a linha com botões |
-| `lebron pontos 24.5` | Over 24.5 pontos, direto |
-| `lebron pontos under 24.5` (ou `u24.5`) | Under 24.5 pontos |
-| `jokic td` | Triplo-duplo |
-
-Comandos: `/j` jogos · `/l` lista · `/p` todos os pedidos possíveis · `/limpar` apaga a conversa · `/a` ajuda.
-Atalhos para quem prefere números: `/statsjogo 2`, `/add 3 7`, `/r 1 2 5`.
+Atalho para quem prefere escrever: `lebron pontos 24.5` (over) ou `lebron pontos under 24.5`.
 
 ## Criar o teu próprio bot
 
@@ -106,10 +103,14 @@ Instala tudo e cria um serviço `systemd` que arranca sozinho.
 
 - **Estatísticas ao vivo**: endpoints públicos da ESPN (scoreboard e summary), lidos a cada 20 s
 - **Calendário**: scoreboard da ESPN dos próximos 7 dias
-- **Equipa de cada jogador**: plantéis públicos da ESPN
+- **Equipa de cada jogador e lesões**: plantéis públicos da ESPN
+- **Histórico para a análise**: gamelog público da ESPN (época atual e 3 anteriores)
 - **Guardar as listas**: SQLite
 
 ```
+analise.py    histórico jogo a jogo (gamelog da ESPN) e dados da análise
+analise_img.py  gráfico da análise (Pillow)
+fontes/       letra Inter (licença SIL OFL, ver fontes/OFL.txt)
 core.py       lógica (interpretar pedidos, alertas, duplo/triplo-duplo, calendário), sem rede
 bot.py        Telegram, leitura dos dados e base de dados
 test_core.py  simula jogos completos e verifica os alertas

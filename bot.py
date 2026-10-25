@@ -17,10 +17,11 @@ from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Inp
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 import io
+import math
 
 import analise
 import analise_img
-from core import (STATS, Sub, Tracker, alvo, box_espn, calendario_espn, confronto, cores, descr_linha, encontrar,
+from core import (norm, STATS, Sub, Tracker, alvo, box_espn, calendario_espn, confronto, cores, descr_linha, encontrar,
                   falta_dd, jogadores_espn, jogo_espn, linha_stats, marcador, nome_completo, parse_add, parse_seguir,
                   proximo_jogo, quando, resumo_dd, situacao_linha, texto_pedidos, valor_de, _numero)
 
@@ -39,7 +40,7 @@ def _ler_token() -> str:
     return token
 
 
-VERSAO = "2026-10-25 19:10 (análise sem acentos)"
+VERSAO = "2026-10-25 19:40 (sem apostas repetidas)"
 TOKEN = _ler_token()
 INTERVALO = int(os.getenv("INTERVALO", "20"))  # segundos entre leituras
 PASTA_BOT = os.path.dirname(os.path.abspath(__file__))
@@ -318,31 +319,36 @@ async def erro_geral(update: object, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------- menu principal (botões fixos em baixo) ----------
-BOTAO_JOGOS, BOTAO_LISTA, BOTAO_AJUDA = "🏀 Jogos de hoje", "📋 A minha lista", "❓ Ajuda"
-MENU = ReplyKeyboardMarkup([[BOTAO_JOGOS, BOTAO_LISTA], [BOTAO_AJUDA]], resize_keyboard=True, is_persistent=True)
+BOTAO_JOGOS, BOTAO_PROCURAR = "🏀 Jogos de hoje", "🔎 Procurar jogador"
+BOTAO_LISTA, BOTAO_LIMPAR, BOTAO_AJUDA = "📋 A minha lista", "🧹 Limpar conversa", "❓ Ajuda"
+MENU = ReplyKeyboardMarkup([[BOTAO_JOGOS, BOTAO_PROCURAR], [BOTAO_LISTA, BOTAO_LIMPAR], [BOTAO_AJUDA]],
+                           resize_keyboard=True, is_persistent=True)
 FECHAR = InlineKeyboardButton("✖️ Fechar", callback_data="fechar")
 
 AJUDA = (
     "🏀 <b>NBA Alerts</b>\n\n"
-    "Usa os botões em baixo:\n\n"
+    "Tudo funciona com os botões em baixo:\n\n"
     f"<b>{BOTAO_JOGOS}</b>\n"
-    "Escolhe o jogo, depois a equipa e os jogadores. "
-    "Para cada jogador escolhes a estatística e a linha (over/under).\n\n"
+    "Escolhe o jogo, a equipa e os jogadores (antes do jogo vês os plantéis, durante o jogo as stats).\n\n"
+    f"<b>{BOTAO_PROCURAR}</b>\n"
+    "Escreves o nome (ex.: lebron) e escolhes o jogador.\n\n"
+    "Depois, para cada jogador: estatística → over/under → linha (com botões +/−). "
+    "Na confirmação tens 📊 Ver análise com os últimos jogos.\n\n"
     f"<b>{BOTAO_LISTA}</b>\n"
-    "O que estás a seguir, como está cada aposta, e botão para remover.\n\n"
-    "Também podes escrever o nome de um jogador, ex.: <code>lebron</code>\n"
-    "Atalhos: <code>lebron pontos 24.5</code> (over) · <code>lebron pontos under 24.5</code>\n\n"
+    "Como está cada aposta, e botão para remover.\n\n"
+    f"<b>{BOTAO_LIMPAR}</b>\n"
+    "Apaga as mensagens da conversa. A tua lista fica guardada.\n\n"
     "Recebes aviso a cada cesto, quando a linha está perto, quando bate (ou o under se perde), "
     "estatísticas anuladas, 4–5 faltas e o resultado no fim.\n\n"
-    "Outros comandos: /p pedidos possíveis · /limpar apaga a conversa\n\n"
     "Os dados vêm da ESPN com cerca de 10–30 s de atraso em relação à TV."
 )
+TECLADO_AJUDA = InlineKeyboardMarkup([[InlineKeyboardButton("📖 Todas as estatísticas", callback_data="menu:pedidos")]])
 
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_html(
         "Olá! 👋 Eu aviso-te no telemóvel quando os teus jogadores da NBA marcam, ressaltam, assistem…\n\n"
-        "Os botões do menu ficam aqui em baixo 👇", reply_markup=MENU)
+        "Usa os botões aqui em baixo 👇 — não precisas de escrever comandos.", reply_markup=MENU)
     await update.message.reply_html(
         "Queres ver os jogos de hoje?",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏀 Sim, ver jogos", callback_data="menu:jogos"),
@@ -350,7 +356,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_ajuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_html(AJUDA, reply_markup=MENU)
+    await update.message.reply_html(AJUDA, reply_markup=TECLADO_AJUDA)
 
 
 async def cmd_pedidos(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -370,6 +376,9 @@ async def fechar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def menu_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await responder(q)
+    if q.data == "menu:pedidos":
+        await ctx.bot.send_message(q.message.chat.id, texto_pedidos(), parse_mode="HTML")
+        return
     if q.data == "menu:jogos":
         try:
             await q.message.delete()
@@ -704,16 +713,98 @@ async def lado_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await proximo_passo(ctx, chat_id)
         return
     pend["espera_linha"] = True
-    exemplo = "24.5" if pend["stat"] in ("pts", "pra", "pr", "pa") else "5.5"
-    await q.edit_message_text(
-        f"🎯 <b>{nome}</b> · {STATS[pend['stat']]['nome']} · {'📈 Over' if lado == 'over' else '📉 Under'}\n\n"
-        f"✍️ Escreve a linha da aposta (ex.: <code>{exemplo}</code>)",
-        parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[CANCELAR]]))
+    media = await media_recente(ctx.application.bot_data["dados"], pend["fila"][0], pend["stat"])
+    pend["media"] = media
+    pend["linha_tmp"] = linha_inicial(pend["stat"], media)
+    await q.edit_message_text(texto_seletor(pend), parse_mode="HTML", reply_markup=teclado_seletor(pend))
+
+
+# Linha de partida quando não há histórico (valores típicos das casas de apostas).
+LINHA_PADRAO = {"pts": 19.5, "reb": 6.5, "ast": 4.5, "3pt": 1.5, "stl": 0.5, "blk": 0.5,
+                "pra": 29.5, "pr": 24.5, "pa": 24.5, "ra": 10.5}
+GRANDES = ("pts", "pra", "pr", "pa", "ra")
+
+
+def linha_inicial(stat: str, media) -> float:
+    """Média recente arredondada para o x.5 mais próximo (ex.: 22.4 -> 22.5; 22.9 -> 22.5)."""
+    if media is None:
+        return LINHA_PADRAO.get(stat, 0.5)
+    return max(0.5, math.floor(media) + 0.5)   # o x.5 mais próximo da média
+
+
+async def media_recente(dados: Dados, nome: str, stat: str):
+    """Média dos últimos 5 jogos (ou None se não der em poucos segundos)."""
+    try:
+        async def calcula():
+            achados = [p for p in encontrar(await dados.jogadores(), nome) if p.get("id")]
+            if len(achados) != 1:
+                return None
+            ep = analise.epoca_espn(datetime.now(timezone.utc))
+            jogos = []
+            for e in (ep, ep - 1):
+                jogos += await dados.gamelog(achados[0]["id"], e)
+                if len([g for g in jogos if g["stats"].get("minutes", 0) > 0]) >= 5:
+                    break
+            jogos.sort(key=lambda g: g["data"], reverse=True)
+            vals = [valor_de(stat, g["stats"]) for g in jogos if g["stats"].get("minutes", 0) > 0][:5]
+            return sum(vals) / len(vals) if vals else None
+        return await asyncio.wait_for(calcula(), timeout=5)
+    except Exception:
+        return None
+
+
+def texto_seletor(pend: dict) -> str:
+    nome = html.escape(pend["fila"][0])
+    lado = "📈 Over" if pend["lado"] == "over" else "📉 Under"
+    texto = (f"🎯 <b>{nome}</b> · {STATS[pend['stat']]['nome']} · {lado}{progresso(pend)}\n\n"
+             f"Linha: <b>{pend['linha_tmp']:g}</b>")
+    if pend.get("media") is not None:
+        texto += f"\n<i>média dos últimos 5 jogos: {pend['media']:.1f}</i>"
+    return texto + "\n\nAjusta com os botões e confirma (ou escreve o número)."
+
+
+def teclado_seletor(pend: dict) -> InlineKeyboardMarkup:
+    if pend["stat"] in GRANDES:
+        passos = [["-5", "-1", "-0.5"], ["+0.5", "+1", "+5"]]
+    else:
+        passos = [["-1", "-0.5", "+0.5", "+1"]]
+    linhas = [[InlineKeyboardButton(p.replace("-", "−"), callback_data=f"ln:{p}") for p in fila] for fila in passos]
+    linhas.append([InlineKeyboardButton(f"✅ Confirmar {pend['linha_tmp']:g}", callback_data="ln:ok")])
+    linhas.append([CANCELAR])
+    return InlineKeyboardMarkup(linhas)
+
+
+async def seletor_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    chat_id = q.message.chat.id
+    pend = pendente(ctx, chat_id)
+    if not pend or not pend["fila"] or not pend.get("espera_linha"):
+        await responder(q, "Este pedido já expirou.")
+        return
+    acao = q.data.split(":", 1)[1]
+    if acao == "ok":
+        await responder(q)
+        linha = pend["linha_tmp"]
+        pend["espera_linha"] = False
+        lado = "Over" if pend["lado"] == "over" else "Under"
+        await q.edit_message_text(f"🎯 <b>{html.escape(pend['fila'][0])}</b> · {STATS[pend['stat']]['nome']} · "
+                                  f"{lado} {linha:g}", parse_mode="HTML")
+        await adicionar_atual(ctx, chat_id, linha, pend["lado"])
+        await proximo_passo(ctx, chat_id)
+        return
+    novo = max(0.5, round(pend["linha_tmp"] + float(acao), 1))
+    if novo == pend["linha_tmp"]:
+        await responder(q, "A linha mínima é 0.5")
+        return
+    await responder(q)
+    pend["linha_tmp"] = novo
+    await q.edit_message_text(texto_seletor(pend), parse_mode="HTML", reply_markup=teclado_seletor(pend))
 
 
 async def cancelar_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await responder(q)
+    ctx.application.bot_data.setdefault("espera_nome", set()).discard(q.message.chat.id)
     pend = ctx.application.bot_data.setdefault("pendente", {}).pop(q.message.chat.id, None)
     resto = len(pend["fila"]) if pend else 0
     extra = f" ({resto} jogador{'es' if resto != 1 else ''} por adicionar)" if resto else ""
@@ -828,7 +919,7 @@ async def resolver(dados: Dados, consulta: str):
 async def seguir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, args: list[str]):
     res, erro = parse_seguir(args)
     if erro:
-        await update.message.reply_text(erro + "\n\nVê todos os pedidos possíveis em /p", reply_markup=MENU)
+        await update.message.reply_text(erro, reply_markup=MENU)
         return
     consulta, stat, linha, lado = res
     dados: Dados = ctx.application.bot_data["dados"]
@@ -842,8 +933,13 @@ async def seguir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, args: list[str]
             estado_nome, valor, stat = estado2, valor2, None
             aviso = f"Não conheço a estatística «{html.escape(palavra)}».\n\n"
     if estado_nome == "varios":
-        nomes = "\n".join(f"• {html.escape(nome_completo(p))} ({p['team']})" for p in valor[:8])
-        await update.message.reply_html(f"Há vários jogadores com esse nome. Qual deles?\n\n{nomes}\n\nEscreve o nome completo.")
+        opcoes = valor[:10]
+        ctx.application.bot_data.setdefault("escolher_nome", {})[update.effective_chat.id] = {
+            "nomes": [nome_completo(p) for p in opcoes], "stat": stat, "linha": linha, "lado": lado}
+        botoes = [[InlineKeyboardButton(f"{nome_completo(p)} · {cores(p['team'])} {p['team']}", callback_data=f"nm:{i}")]
+                  for i, p in enumerate(opcoes)]
+        await update.message.reply_html("Há vários jogadores com esse nome. Qual deles?",
+                                        reply_markup=InlineKeyboardMarkup(botoes + [[CANCELAR]]))
         return
     if estado_nome == "nada":
         await update.message.reply_html(f"Não encontrei nenhum jogador «{html.escape(consulta)}».\n\n"
@@ -853,15 +949,41 @@ async def seguir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, args: list[str]
     await iniciar_fila(ctx, update.effective_chat.id, [valor], stat, linha, lado, aviso)
 
 
+async def nome_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Escolheu um dos jogadores com o mesmo nome."""
+    q = update.callback_query
+    await responder(q)
+    chat_id = q.message.chat.id
+    esc = ctx.application.bot_data.get("escolher_nome", {}).pop(chat_id, None)
+    i = int(q.data.split(":")[1])
+    if not esc or i >= len(esc["nomes"]):
+        await q.edit_message_text("Este pedido já expirou. Volta a procurar o jogador.")
+        return
+    await q.edit_message_text(f"👤 <b>{html.escape(esc['nomes'][i])}</b>", parse_mode="HTML")
+    await iniciar_fila(ctx, chat_id, [esc["nomes"][i]], esc["stat"], esc["linha"], esc["lado"])
+
+
 async def criar_sub(ctx, chat_id: int, nome: str, stat: str, linha, lado: str = "over") -> tuple[str, Sub]:
     """Guarda o seguimento e devolve a mensagem de confirmação com o estado atual."""
     lado = lado if linha is not None else "over"
+    mesma_linha = lambda a, b: (a is None and b is None) or (a is not None and b is not None and abs(a - b) < 1e-9)
+    acabados = fins(chat_id)
+    parecidas = [x for x in subs_de(chat_id) if norm(x.jogador) == norm(nome) and x.stat == stat]
+    igual = next((x for x in parecidas if mesma_linha(x.linha, linha) and (linha is None or x.lado == lado)), None)
+    if igual and igual.id not in acabados:
+        return f"ℹ️ {descrever(igual)} já está na tua lista.", igual
     with db() as con:
+        if igual:   # a mesma aposta de um jogo que já acabou: troca pela nova (é para o próximo jogo)
+            con.execute("DELETE FROM subs WHERE id = ?", (igual.id,))
         cur = con.execute("INSERT INTO subs (chat_id, jogador, stat, linha, perto, lado) VALUES (?,?,?,?,NULL,?)",
                           (chat_id, nome, stat, linha, lado))
         sub = Sub(cur.lastrowid, chat_id, nome, stat, linha, None, lado)
+    outras = [x for x in parecidas if x is not igual and x.id not in acabados]
     linha_estado = await estado(ctx.application.bot_data["dados"], sub, ctx.application.bot_data["tracker"])
     texto = f"✅ A seguir: {descrever(sub)}"
+    if outras:
+        ja = ", ".join((descr_linha(x) if x.linha is not None else "sem linha") for x in outras)
+        texto += f"\n<i>(já tinhas {STATS[stat]['nome']} deste jogador: {ja} — ficas com {'as duas' if len(outras) == 1 else 'todas'})</i>"
     if linha_estado:
         texto += f"\n\n{linha_estado}"
     return texto, sub
@@ -884,8 +1006,18 @@ async def texto_livre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await enviar_lista(ctx, chat_id)
         return
     if texto == BOTAO_AJUDA:
-        await update.message.reply_html(AJUDA, reply_markup=MENU)
+        await update.message.reply_html(AJUDA, reply_markup=TECLADO_AJUDA)
         return
+    if texto == BOTAO_LIMPAR:
+        await cmd_limpar(update, ctx)
+        return
+    if texto == BOTAO_PROCURAR:
+        ctx.application.bot_data.setdefault("pendente", {}).pop(chat_id, None)
+        ctx.application.bot_data.setdefault("espera_nome", set()).add(chat_id)
+        await update.message.reply_html("✍️ Escreve o nome do jogador (ex.: <code>lebron</code>, <code>curry</code>, "
+                                        "<code>jokic</code>)", reply_markup=InlineKeyboardMarkup([[CANCELAR]]))
+        return
+    ctx.application.bot_data.setdefault("espera_nome", set()).discard(chat_id)
     pend = pendente(ctx, chat_id)
     if pend and pend.get("espera_linha"):
         await recebeu_linha(update, ctx, pend)
@@ -1052,7 +1184,9 @@ async def cmd_limpar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             falhas += 1  # mensagens com mais de 48 h ou já apagadas
             if falhas >= 3:
                 break
-    await ctx.bot.send_message(chat_id, "🧹 Conversa limpa.", reply_markup=MENU)
+    n = len(subs_de(chat_id))
+    lista = f" A tua lista ({n} aposta{'s' if n != 1 else ''}) continua guardada." if n else ""
+    await ctx.bot.send_message(chat_id, f"🧹 Conversa limpa.{lista}", reply_markup=MENU)
     await ctx.bot.send_message(chat_id, "Queres ver os jogos de hoje?", reply_markup=InlineKeyboardMarkup(
         [[InlineKeyboardButton("🏀 Sim, ver jogos", callback_data="menu:jogos"),
           InlineKeyboardButton("Agora não", callback_data="fechar")]]))
@@ -1113,14 +1247,7 @@ async def ao_iniciar(app: Application):
         log.info("Verificação de saúde na porta %s", porta)
     app.bot_data["dados"] = Dados(httpx.AsyncClient(headers=HEADERS, timeout=15))
     app.bot_data["tracker"] = Tracker()
-    await app.bot.set_my_commands([
-        BotCommand("start", "Menu inicial"),
-        BotCommand("j", "Jogos de hoje"),
-        BotCommand("l", "A minha lista"),
-        BotCommand("p", "Todos os pedidos possíveis"),
-        BotCommand("limpar", "Apagar a conversa e começar do zero"),
-        BotCommand("a", "Ajuda"),
-    ])
+    await app.bot.delete_my_commands()   # tudo funciona com botões; os comandos continuam a existir, escondidos
     app.bot_data["ciclo"] = asyncio.get_running_loop().create_task(ciclo(app))
 
 
@@ -1151,6 +1278,8 @@ def main():
     app.add_handler(CallbackQueryHandler(lista_callback, pattern=r"^lista:"))
     app.add_handler(CallbackQueryHandler(remover_callback, pattern=r"^rm:"))
     app.add_handler(CallbackQueryHandler(analise_callback, pattern=r"^an:"))
+    app.add_handler(CallbackQueryHandler(seletor_callback, pattern=r"^ln:"))
+    app.add_handler(CallbackQueryHandler(nome_callback, pattern=r"^nm:"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texto_livre))
     app.add_error_handler(erro_geral)
     log.info("Bot a correr (versão %s). Leitura a cada %ss.", VERSAO, INTERVALO)
