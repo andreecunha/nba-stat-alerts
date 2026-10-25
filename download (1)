@@ -1,0 +1,5 @@
+__pycache__/
+subs.db
+.venv/
+token.txt
+logos/
