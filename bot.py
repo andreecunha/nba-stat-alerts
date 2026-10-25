@@ -13,9 +13,13 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from telegram.error import BadRequest
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
+import io
+
+import analise
+import analise_img
 from core import (STATS, Sub, Tracker, alvo, box_espn, calendario_espn, confronto, cores, descr_linha, encontrar,
                   falta_dd, jogadores_espn, jogo_espn, linha_stats, marcador, nome_completo, parse_add, parse_seguir,
                   proximo_jogo, quando, resumo_dd, situacao_linha, texto_pedidos, valor_de, _numero)
@@ -44,6 +48,7 @@ REMOVER_APOS = int(os.getenv("REMOVER_APOS", "10"))  # minutos depois do fim do 
 # Dados ao vivo da ESPN (o cdn.nba.com bloqueia pedidos a partir de alguns países/redes).
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
 ESPN_EQUIPAS = f"{ESPN}/teams"
+ESPN_GAMELOG = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/{}/gamelog?season={}"
 NOVA_IORQUE = ZoneInfo("America/New_York")
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
@@ -101,11 +106,11 @@ class Dados:
         return valor
 
     async def jogadores(self) -> list[dict]:
-        """Todos os jogadores da liga com a equipa (plantéis da ESPN, atualizados de 12 em 12 h)."""
+        """Todos os jogadores da liga com a equipa (plantéis da ESPN, atualizados de 3 em 3 h por causa das lesões)."""
         t, valor = self.cache.get("jogadores", (0, None))
-        if valor is not None and time.time() - t < 12 * 3600:
+        if valor is not None and time.time() - t < 3 * 3600:
             return valor
-        equipas = (await self._json(ESPN_EQUIPAS, 12 * 3600))["sports"][0]["leagues"][0]["teams"]
+        equipas = (await self._json(ESPN_EQUIPAS, 24 * 3600))["sports"][0]["leagues"][0]["teams"]
 
         async def plantel(e):
             r = await self.http.get(f"{ESPN_EQUIPAS}/{e['team']['id']}/roster")
@@ -116,6 +121,16 @@ class Dados:
         valor = [p for lista in listas for p in lista]
         self.cache["jogadores"] = (time.time(), valor)
         return valor
+
+    async def gamelog(self, athlete_id: str, epoca: int) -> list[dict]:
+        """Jogos de uma época de um jogador (já convertidos). Épocas passadas ficam 12 h em cache."""
+        validade = 3600 if epoca >= analise.epoca_espn(datetime.now(timezone.utc)) else 12 * 3600
+        try:
+            return analise.parse_gamelog(await self._json(ESPN_GAMELOG.format(athlete_id, epoca), validade))
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:   # jogador sem jogos nessa época
+                return []
+            raise
 
 
 # ---------- base de dados ----------
@@ -260,10 +275,23 @@ async def cmd_diag(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         linhas.append(f"✅ ESPN calendário: {len(await dados.calendario())} jogos")
     except Exception as e:
         linhas.append(f"❌ ESPN calendário: {html.escape(repr(e))[:200]}")
+    todos = []
     try:
-        linhas.append(f"✅ ESPN plantéis: {len(await dados.jogadores())} jogadores")
+        todos = await dados.jogadores()
+        lesionados = sum(1 for p in todos if p.get("lesao"))
+        linhas.append(f"✅ ESPN plantéis: {len(todos)} jogadores ({lesionados} lesionados/em dúvida)")
     except Exception as e:
         linhas.append(f"❌ ESPN plantéis: {html.escape(repr(e))[:200]}")
+    teste = next((p for p in todos if p.get("id") and p["name"] == "LeBron James"), None) or \
+        next((p for p in todos if p.get("id")), None)
+    if teste:
+        try:
+            ep = analise.epoca_espn(datetime.now(timezone.utc))
+            n_atual = len(await dados.gamelog(teste["id"], ep))
+            n_ant = len(await dados.gamelog(teste["id"], ep - 1))
+            linhas.append(f"✅ ESPN histórico ({teste['name']}): {n_atual} jogos esta época, {n_ant} na anterior")
+        except Exception as e:
+            linhas.append(f"❌ ESPN histórico: {html.escape(repr(e))[:200]}")
     await update.message.reply_html("\n".join(linhas))
 
 
@@ -407,8 +435,7 @@ async def mostrar_jogo(ctx, chat_id: int, n: int):
         await ctx.bot.send_message(chat_id, "Não consegui ler as stats desse jogo agora. Tenta daqui a pouco.")
         return
     if game.get("gameStatus") == 1:
-        await ctx.bot.send_message(chat_id, "⏳ Esse jogo ainda não começou, por isso ainda não há stats.\n\n"
-                                            "Podes seguir já um jogador pelo nome, por exemplo: lebron")
+        await mostrar_planteis(ctx, chat_id, game, ids[n - 1])
         return
 
     numerados, linhas, equipas = [], [marcador(game)], {}
@@ -441,12 +468,68 @@ async def mostrar_jogo(ctx, chat_id: int, n: int):
         texto = texto[corte:].lstrip("\n")
 
 
+POSICOES = {"G": "Base/Extremo", "PG": "Base", "SG": "Extremo", "F": "Extremo-poste", "SF": "Extremo",
+            "PF": "Extremo-poste", "C": "Poste", "G-F": "Extremo", "F-C": "Poste", "F-G": "Extremo", "C-F": "Poste"}
+
+
+async def mostrar_planteis(ctx, chat_id: int, game: dict, gid: str):
+    """Jogo ainda por começar: mostra os plantéis (com lesões) e deixa escolher jogadores com botões."""
+    dados: Dados = ctx.application.bot_data["dados"]
+    fora_tri, casa_tri = game["awayTeam"]["teamTricode"], game["homeTeam"]["teamTricode"]
+    try:
+        todos = await dados.jogadores()
+    except Exception as e:
+        log.warning("plantéis: %s", e)
+        await ctx.bot.send_message(chat_id, "⏳ Esse jogo ainda não começou e não consegui ler os plantéis agora.\n\n"
+                                            "Podes seguir um jogador pelo nome, por exemplo: lebron")
+        return
+    inicio = ""
+    try:
+        jogo = next((j for j in await dados.calendario() if j["gameId"] == gid), None)
+        if jogo:
+            inicio = quando(jogo["inicio"], datetime.now(timezone.utc))
+    except Exception:
+        pass
+
+    linhas = [f"⏳ {confronto(fora_tri, casa_tri)}" + (f"\n{inicio}" if inicio else ""), "",
+              "Ainda não começou — estes são os plantéis:"]
+    numerados, equipas = [], {}
+    for tri in (fora_tri, casa_tri):
+        plantel = sorted((p for p in todos if p["team"] == tri), key=lambda p: (bool(p.get("lesao")), p["name"]))
+        linhas.append(f"\n<b>{cores(tri)} {tri}</b>")
+        botoes = []
+        for p in plantel:
+            numerados.append(p["name"])
+            extra = f" · 🚑 {html.escape(p['lesao'])}" if p.get("lesao") else ""
+            pos = f" · {p['pos']}" if p.get("pos") else ""
+            linhas.append(f"{len(numerados)}. <b>{html.escape(p['name'])}</b>{pos}{extra}")
+            botoes.append((p["name"], ("🚑" if p.get("lesao") else p.get("pos") or "")))
+        equipas[tri] = botoes
+    if not numerados:
+        await ctx.bot.send_message(chat_id, "⏳ Esse jogo ainda não começou e ainda não há plantéis disponíveis.\n\n"
+                                            "Podes seguir um jogador pelo nome, por exemplo: lebron")
+        return
+    ctx.application.bot_data.setdefault("stats_listados", {})[chat_id] = numerados
+    ctx.application.bot_data.setdefault("escolha", {})[chat_id] = {"equipas": equipas, "sel": [], "msg": None}
+    linhas.append("\n🚑 = lesionado ou em dúvida (confirma antes de apostar)")
+    linhas.append("\n➕ Queres seguir algum jogador? Escolhe a equipa:")
+    teclado = InlineKeyboardMarkup([[InlineKeyboardButton(f"{cores(t)} {t}", callback_data=f"eq:{t}") for t in equipas],
+                                    [FECHAR]])
+    texto = "\n".join(linhas)
+    while texto:
+        corte = texto.rfind("\n", 0, 4000) if len(texto) > 4000 else len(texto)
+        ultimo = corte >= len(texto)
+        await ctx.bot.send_message(chat_id, texto[:corte], parse_mode="HTML", reply_markup=teclado if ultimo else None)
+        texto = texto[corte:].lstrip("\n")
+
+
 # ---------- escolher jogadores com botões ----------
 def teclado_jogadores(esc: dict, tri: str) -> InlineKeyboardMarkup:
     botoes = []
-    for i, (nome, pts) in enumerate(esc["equipas"][tri]):
+    for i, (nome, rotulo) in enumerate(esc["equipas"][tri]):
         marca = "✅ " if nome in esc["sel"] else ""
-        botoes.append(InlineKeyboardButton(f"{marca}{nome} · {pts}", callback_data=f"pl:{tri}:{i}"))
+        extra = f" · {rotulo}" if rotulo != "" else ""
+        botoes.append(InlineKeyboardButton(f"{marca}{nome}{extra}", callback_data=f"pl:{tri}:{i}"))
     linhas = [botoes[i:i + 2] for i in range(0, len(botoes), 2)]
     outra = [t for t in esc["equipas"] if t != tri]
     fundo = [InlineKeyboardButton(f"🔁 {cores(outra[0])} {outra[0]}", callback_data=f"eq:{outra[0]}")] if outra else []
@@ -456,7 +539,7 @@ def teclado_jogadores(esc: dict, tri: str) -> InlineKeyboardMarkup:
 
 
 def texto_escolha(esc: dict, tri: str) -> str:
-    texto = f"👆 Toca nos jogadores de <b>{cores(tri)} {tri}</b> que queres seguir (o número é os pontos)."
+    texto = f"👆 Toca nos jogadores de <b>{cores(tri)} {tri}</b> que queres seguir."
     if esc["sel"]:
         texto += "\n\nEscolhidos: " + ", ".join(f"<b>{html.escape(n)}</b>" for n in esc["sel"])
     return texto + "\n\nNo fim carrega em ▶️ Seguir."
@@ -575,8 +658,11 @@ async def proximo_passo(ctx, chat_id: int, aviso: str = "", q=None):
 async def adicionar_atual(ctx, chat_id: int, linha, lado: str):
     pend = pendente(ctx, chat_id)
     nome = pend["fila"].pop(0)
-    texto = await criar_sub(ctx, chat_id, nome, pend["stat"], linha, lado)
-    await ctx.bot.send_message(chat_id, texto, parse_mode="HTML")
+    texto, sub = await criar_sub(ctx, chat_id, nome, pend["stat"], linha, lado)
+    teclado = None
+    if sub.linha is not None and not STATS[sub.stat].get("dd"):
+        teclado = InlineKeyboardMarkup([[InlineKeyboardButton("📊 Ver análise", callback_data=f"an:{sub.id}")]])
+    await ctx.bot.send_message(chat_id, texto, parse_mode="HTML", reply_markup=teclado)
     # prepara o próximo jogador
     pend.update({"stat": pend["stat_fixa"], "lado": None, "espera_linha": False})
     if not pend["fila"]:
@@ -641,6 +727,79 @@ async def recebeu_linha(update: Update, ctx, pend: dict):
     await proximo_passo(ctx, update.effective_chat.id)
 
 
+# ---------- análise da aposta ----------
+def sub_por_id(sub_id: int, chat_id: int) -> Sub | None:
+    return next((s for s in subs_de(chat_id) if s.id == sub_id), None)
+
+
+async def fazer_analise(dados: Dados, s: Sub):
+    """Devolve (imagem PNG em bytes, legenda) ou levanta ValueError com uma mensagem para o utilizador."""
+    achados = [p for p in encontrar(await dados.jogadores(), s.jogador) if p.get("id")]
+    if len(achados) != 1:
+        raise ValueError("Não encontrei o histórico deste jogador.")
+    p = achados[0]
+    agora = datetime.now(timezone.utc)
+
+    # Adversário: o jogo a decorrer ou o próximo da equipa.
+    estados = {}
+    try:
+        estados = {g["gameId"]: g["gameStatus"] for g in await dados.jogos_hoje()}
+    except Exception:
+        pass
+    jogo = proximo_jogo(await dados.calendario(), p["team"], agora, estados)
+    if not jogo:
+        raise ValueError("Não encontrei o próximo jogo deste jogador.")
+    adversario = jogo["casa"] if jogo["fora"] == p["team"] else jogo["fora"]
+    quando_txt = "a decorrer" if jogo["estado"] == 2 else quando(jogo["inicio"], agora).split(" (")[-1].rstrip(")")
+
+    # Histórico: época atual + anteriores (os jogos contra a mesma equipa são poucos por época).
+    epoca = analise.epoca_espn(agora)
+    resultados = await asyncio.gather(*(dados.gamelog(p["id"], e) for e in range(epoca, epoca - 4, -1)),
+                                      return_exceptions=True)
+    jogos = [g for r in resultados if isinstance(r, list) for g in r]
+    if not jogos:
+        erro = next((r for r in resultados if isinstance(r, Exception)), None)
+        if erro:
+            log.warning("gamelog %s: %r", p["name"], erro)
+        raise ValueError("Não consegui obter o histórico de jogos deste jogador agora.")
+    jogos.sort(key=lambda g: g["data"], reverse=True)
+    ultimos, contra, min_rec, min_ep = analise.preparar(jogos, s.stat, adversario, epoca)
+
+    img = await asyncio.to_thread(
+        analise_img.gerar, p["name"], p["team"], adversario, STATS[s.stat]["nome"], s.linha, s.under,
+        ultimos, contra, min_rec, min_ep, quando_txt, False, jogo["casa"] == p["team"])
+    buf = io.BytesIO()
+    await asyncio.to_thread(img.save, buf, "PNG")
+    legenda = analise.resumo_texto(s.stat, s.linha, s.under, ultimos, contra, adversario)
+    legenda += "\n\nℹ️ É o que aconteceu, não uma previsão. 5 jogos é uma amostra pequena."
+    return buf.getvalue(), legenda
+
+
+async def analise_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    chat_id = q.message.chat.id
+    s = sub_por_id(int(q.data.split(":")[1]), chat_id)
+    if not s:
+        await responder(q, "Já não segues esta aposta.", show_alert=True)
+        return
+    await responder(q, "A preparar a análise…")
+    aguarda = await ctx.bot.send_message(chat_id, f"📊 A analisar {html.escape(s.jogador)}…", parse_mode="HTML")
+    try:
+        png, legenda = await fazer_analise(ctx.application.bot_data["dados"], s)
+    except ValueError as e:
+        await aguarda.edit_text(f"😕 {e}")
+        return
+    except Exception:
+        log.exception("análise")
+        await aguarda.edit_text("😕 Não consegui fazer a análise agora. Tenta daqui a pouco.")
+        return
+    try:
+        await aguarda.delete()
+    except Exception:
+        pass
+    await ctx.bot.send_photo(chat_id, InputFile(io.BytesIO(png), filename="analise.png"), caption=legenda)
+
+
 # ---------- seguir pelo nome escrito ----------
 async def resolver(dados: Dados, consulta: str):
     """Nome escrito -> ("ok", nome completo) | ("varios", [jogadores]) | ("nada", None)."""
@@ -689,7 +848,7 @@ async def seguir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, args: list[str]
     await iniciar_fila(ctx, update.effective_chat.id, [valor], stat, linha, lado, aviso)
 
 
-async def criar_sub(ctx, chat_id: int, nome: str, stat: str, linha, lado: str = "over") -> str:
+async def criar_sub(ctx, chat_id: int, nome: str, stat: str, linha, lado: str = "over") -> tuple[str, Sub]:
     """Guarda o seguimento e devolve a mensagem de confirmação com o estado atual."""
     lado = lado if linha is not None else "over"
     with db() as con:
@@ -700,7 +859,7 @@ async def criar_sub(ctx, chat_id: int, nome: str, stat: str, linha, lado: str = 
     texto = f"✅ A seguir: {descrever(sub)}"
     if linha_estado:
         texto += f"\n\n{linha_estado}"
-    return texto
+    return texto, sub
 
 
 async def cmd_seguir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -986,6 +1145,7 @@ def main():
     app.add_handler(CallbackQueryHandler(cancelar_callback, pattern=r"^cancelar$"))
     app.add_handler(CallbackQueryHandler(lista_callback, pattern=r"^lista:"))
     app.add_handler(CallbackQueryHandler(remover_callback, pattern=r"^rm:"))
+    app.add_handler(CallbackQueryHandler(analise_callback, pattern=r"^an:"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texto_livre))
     app.add_error_handler(erro_geral)
     log.info("Bot a correr. Leitura a cada %ss.", INTERVALO)

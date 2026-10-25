@@ -438,8 +438,16 @@ def jogadores_espn(abreviatura: str, roster: dict) -> list[dict]:
     atletas = roster.get("athletes", [])
     if atletas and "items" in atletas[0]:  # formato agrupado por posição
         atletas = [a for grupo in atletas for a in grupo["items"]]
-    return [{"name": a.get("fullName") or a.get("displayName", ""), "firstName": a.get("firstName", ""),
-             "familyName": a.get("lastName", ""), "team": equipa} for a in atletas]
+    jogadores = []
+    for a in atletas:
+        lesoes = a.get("injuries") or []
+        lesao = (lesoes[0].get("status") or "") if lesoes else ""   # ex.: "Out", "Day-To-Day"
+        jogadores.append({
+            "name": a.get("fullName") or a.get("displayName", ""), "firstName": a.get("firstName", ""),
+            "familyName": a.get("lastName", ""), "team": equipa, "id": str(a.get("id", "")),
+            "pos": (a.get("position") or {}).get("abbreviation", ""), "jersey": a.get("jersey", ""),
+            "lesao": lesao})
+    return jogadores
 
 
 def _data(t: str) -> datetime:
