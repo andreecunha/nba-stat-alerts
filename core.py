@@ -338,7 +338,7 @@ class Tracker:
         if not linhas:
             return None
         linhas.append(resumo_dd(st))
-        return com_marcador(linhas, game)
+        return "\n".join(linhas)
 
     def processar(self, box: dict, subs: list[Sub]) -> list[tuple[int, str]]:
         game = box["game"]
@@ -402,7 +402,7 @@ class Tracker:
                         fl.discard("batida")
                         msgs.append((s.chat_id, f"↩️ <b>ANULADO</b> — correção nas stats de <b>{nome}</b>: "
                                                 f"{valor}/{info['dd']} categorias para o {info['nome']}"
-                                                f"{' (deixou de ter)' if perdeu else ''}\n{resumo_dd(st)}\n\n{marcador(game)}"))
+                                                f"{' (deixou de ter)' if perdeu else ''}\n{resumo_dd(st)}"))
                     texto = self._dd(s, st, anterior, valor, fl, nome, game)
                     if texto:
                         msgs.append((s.chat_id, texto))
@@ -411,48 +411,32 @@ class Tracker:
                     self.ultimo[chave] = valor
                     antes_st = self.comp.get(chave)
                     o_que = detalhe(s.stat, antes_st, st, valor - anterior)
-                    total = f"<b>{valor}</b>{unidade(s.stat)}"
+                    # Formato curto, igual no chat e no 🔔: "Austin Reaves +1 assistência → 2/5"
+                    total = f"<b>{valor}</b>" + (f"/{alvo(s.linha)}" if s.linha is not None else "") + unidade(s.stat)
                     if valor > anterior:
-                        linhas = [f"🏀 <b>{nome}</b> {o_que} → {total}"]
-                        curto = f"🏀 <b>{nome}</b> {o_que} → {total}"
+                        marca = ""
                         if s.linha is not None:
                             falta = alvo(s.linha) - valor
                             if falta <= 0 and "batida" not in fl:
                                 fl.update({"batida", "perto"})
-                                if s.under:
-                                    linhas.insert(0, f"❌ <b>UNDER PERDIDO</b> — passou de {s.linha:g} {info['nome']}")
-                                    curto = f"❌ <b>{nome}</b> {o_que} → {total} · under perdido"
-                                else:
-                                    linhas.insert(0, f"✅ <b>LINHA BATIDA</b> — mais de {s.linha:g} {info['nome']}")
-                                    curto = f"✅ <b>{nome}</b> {o_que} → {total} · linha batida"
+                                marca = "❌ " if s.under else "✅ "
                             elif 0 < falta <= s.margem() and "perto" not in fl:
                                 fl.add("perto")
-                                if s.under:
-                                    linhas.insert(0, f"⚠️ <b>CUIDADO COM O UNDER</b> — {situacao_linha(s, valor)}")
-                                    curto = f"⚠️ <b>{nome}</b> {o_que} → {total} · {situacao_linha(s, valor).replace('⚠️ ', '')}"
-                                else:
-                                    linhas.insert(0, f"⚠️ <b>PERTO DA LINHA</b> — falta{'m' if falta > 1 else ''} {falta}")
-                                    curto = f"⚠️ <b>{nome}</b> {o_que} → {total} · falta{'m' if falta > 1 else ''} {falta}"
-                            linhas.append(f"{'Under' if s.under else 'Over'} {s.linha:g} · {situacao_linha(s, valor)}")
-                        msgs.append(Alerta((s.chat_id, com_marcador(linhas, game)), curto=curto))
+                                marca = "⚠️ "
+                        texto = f"{marca}<b>{nome}</b> {o_que} → {total}"
+                        msgs.append(Alerta((s.chat_id, texto), curto=texto))
                     elif valor < anterior:
                         # Correção de estatística (cesto ou ressalto retirado, por exemplo).
-                        linhas = [f"↩️ <b>ANULADO</b> — <b>{nome}</b> {o_que.replace('−', '')} retirado{'s' if anterior - valor > 1 else ''}",
-                                  f"Agora tem {total}" + ("" if unidade(s.stat) else f" {info['nome']}")]
-                        curto = f"↩️ Anulado: <b>{nome}</b> {o_que} → {total}"
+                        texto = f"↩️ Anulado: <b>{nome}</b> {o_que} → {total}"
                         if s.linha is not None:
                             falta = alvo(s.linha) - valor
                             if falta > 0:
                                 if "batida" in fl:
-                                    linhas.append("✅ O under volta a estar vivo" if s.under
-                                                  else f"⚠️ A linha {s.linha:g} deixou de estar batida")
+                                    texto += " · under volta a estar vivo" if s.under else " · linha deixou de estar batida"
                                 fl.discard("batida")
                                 if falta > s.margem():
                                     fl.discard("perto")
-                            linhas.append(f"{'Under' if s.under else 'Over'} {s.linha:g} · {situacao_linha(s, valor)}")
-                            if "deixou de estar" in linhas[-2] or "volta a estar" in linhas[-2]:
-                                curto += " · " + linhas[-2].split(" ", 1)[1].lower()
-                        msgs.append(Alerta((s.chat_id, com_marcador(linhas, game)), curto=curto))
+                        msgs.append(Alerta((s.chat_id, texto), curto=texto))
 
                 if not info.get("dd"):
                     self.comp[chave] = {c: int(st.get(c, 0) or 0) for c in info["campos"]}
@@ -465,18 +449,15 @@ class Tracker:
                     if antes_campo is not None and agora_campo != antes_campo:
                         texto = (f"🟢 <b>{nome}</b> entrou em campo" if agora_campo
                                  else f"🪑 <b>{nome}</b> foi para o banco")
-                        msgs.append(Alerta((s.chat_id, f"{texto}\n\n{marcador(game)}"), silencioso=True))
+                        msgs.append(Alerta((s.chat_id, texto), silencioso=True))
                 faltas = int(st.get("fouls", 0) or 0)
                 vistas = self.faltas.get(chave_f)
                 self.faltas[chave_f] = max(faltas, vistas or 0)
                 if vistas is not None and faltas > vistas and not final and "inativo" not in fl:
                     if faltas >= 6:
-                        msgs.append(Alerta((s.chat_id, f"🟥 <b>{nome}</b> fez a 6.ª falta e <b>está fora do jogo</b> (foul out)\n\n{marcador(game)}"),
-                                           curto=f"🟥 <b>{nome}</b> está fora do jogo (6 faltas)"))
+                        msgs.append(Alerta((s.chat_id, f"🟥 <b>{nome}</b> está fora do jogo (6 faltas)")))
                     elif faltas >= 4:
-                        msgs.append(Alerta((s.chat_id, f"🟨 <b>{nome}</b> tem <b>{faltas} faltas</b> — à 6.ª sai do jogo"
-                                                       f"{' (falta só 1!)' if faltas == 5 else ''}\n\n{marcador(game)}"),
-                                           curto=f"🟨 <b>{nome}</b> {faltas} faltas"))
+                        msgs.append(Alerta((s.chat_id, f"🟨 <b>{nome}</b> {faltas} faltas")))
 
                 if final and "final" not in fl:
                     fl.add("final")

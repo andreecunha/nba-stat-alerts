@@ -189,11 +189,12 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 .aposta.a-mexer { transition: none; user-select: none; -webkit-user-select: none; }
 .aposta.aberta { transform: translateX(-172px); }
 .mais-acoes { align-self: start; width: 32px; height: 32px; border-radius: 50%; color: var(--suave); font-size: 20px; line-height: 1; }
-.campo { display: inline-flex; align-items: center; gap: 5px; margin: 6px 0 0 8px; vertical-align: 1px;
-         font-size: 13px; font-weight: 600; color: var(--suave); }
-.campo::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #56608a; }
+/* Em campo / banco: a bolinha fica na mesma coluna e com o mesmo tamanho da bolinha vermelha do resultado. */
+.campo { display: block; font-size: 13px; font-weight: 600; color: var(--suave); margin-bottom: 2px; }
+.campo::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #56608a;
+                 margin-right: 6px; vertical-align: 1px; }
 .campo.sim { color: var(--bate); }
-.campo.sim::before { background: var(--bate); box-shadow: 0 0 6px var(--bate); }
+.campo.sim::before { background: var(--bate); }
 .mudo-ic { display: inline-block; vertical-align: -2px; margin-left: 6px; color: var(--falha); }
 .mudo-ic svg { width: 16px; height: 16px; }
 @media (prefers-reduced-motion: reduce) { .aposta { transition: none; } }
@@ -667,9 +668,9 @@ function cartao(a, mais) {
     </div>
     <div class="aposta ${mais ? "mexeu" : ""} ${aberta ? "aberta" : ""}" data-id="${a.id}">
       ${foto(a.foto, a.jogador)}
-      <div><div class="titulo">${esc(a.jogador)}${a.mudo ? `<span class="mudo-ic" aria-label="silenciado">${SEM_SOM}</span>` : ""}</div>${etiqueta(a)}${campo(a)}</div>
+      <div><div class="titulo">${esc(a.jogador)}${a.mudo ? `<span class="mudo-ic" aria-label="silenciado">${SEM_SOM}</span>` : ""}</div>${etiqueta(a)}</div>
       <button class="mais-acoes" data-id="${a.id}" aria-label="Opções de ${esc(a.jogador)}">⋯</button>
-      <div class="estado">${progresso(a, mais)}</div>
+      <div class="estado">${campo(a)}${progresso(a, mais)}</div>
     </div>
   </div>`;
 }

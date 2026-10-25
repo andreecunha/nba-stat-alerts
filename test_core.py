@@ -56,10 +56,11 @@ assert any("vários jogadores" in x for _, x in todas[0])
 assert sum("Começou" in x for _, x in todas[0]) == 1          # um só aviso por jogo
 assert any("Começou" in x and "LeBron" in x and "Curry" in x for _, x in todas[0])
 assert any("+2 pontos" in x for _, x in todas[1])
-assert any("PERTO DA LINHA" in x and "LeBron" in x for _, x in todas[2])
-assert any("PERTO DA LINHA" in x and "Curry" in x for _, x in todas[2])
-assert any("LINHA BATIDA" in x for _, x in todas[3])
-assert not any("LINHA BATIDA" in x for _, x in todas[4])               # só uma vez
+assert any(x.startswith("⚠️") and "LeBron" in x and "22</b>/25" in x for _, x in todas[2])   # perto: 22/25
+assert any(x.startswith("⚠️") and "Curry" in x for _, x in todas[2])
+assert any(x.startswith("✅") and "25</b>/25" in x for _, x in todas[3])
+assert not any(x.startswith("✅") for _, x in todas[4])                 # só uma vez
+assert all("\n" not in x for _, x in todas[3])                          # uma linha só, sem marcador
 assert any("27 pontos — mais de 24.5 ✅" in x.replace("</b>", "").replace("<b>", "") for _, x in todas[5])
 assert any("❌" in x for _, x in todas[5])                              # Curry falhou a linha de triplos
 
@@ -72,7 +73,7 @@ t3 = Tracker()
 s4 = Sub(4, 300, "LeBron James", "pts", 30.5)
 t3.semear(s4, "0022600050", {"points": 25})
 m = t3.processar(seq[4], [s4])
-assert len(m) == 1 and "+2 pontos" in m[0][1] and "faltam 4" in m[0][1], m
+assert len(m) == 1 and "+2 pontos" in m[0][1] and "27</b>/31" in m[0][1], m
 
 # jogador inativo
 inativo = jogador(1, "LeBron", "James"); inativo["status"] = "INACTIVE"; inativo["notPlayingReason"] = "INACTIVE_INJURY"
@@ -133,22 +134,22 @@ s_pts = Sub(20, 500, "LeBron James", "pts", 24.5); s_reb = Sub(21, 500, "LeBron 
 t5 = Tracker()
 t5.processar(bx2(lb(20, 2)), [s_pts, s_reb])                    # primeira leitura
 m = t5.processar(bx2(lb(25, 3)), [s_pts, s_reb])                # linha batida
-assert any("LINHA BATIDA" in x for _, x in m)
+assert any(x.startswith("✅") for _, x in m)
 m = t5.processar(bx2(lb(23, 4)), [s_pts, s_reb])                # NBA retira 2 pontos + 4.ª falta
 txt5 = " | ".join(x for _, x in m); print(txt5)
-assert "ANULADO" in txt5 and "deixou de estar batida" in txt5
+assert "Anulado" in txt5 and "−2 pontos" in txt5 and "deixou de estar batida" in txt5
 assert txt5.count("4 faltas") == 1                               # só um aviso de faltas por jogador/chat
-m = t5.processar(bx2(lb(23, 5)), [s_pts, s_reb]); assert "falta só 1" in " ".join(x for _, x in m)
+m = t5.processar(bx2(lb(23, 5)), [s_pts, s_reb]); assert "5 faltas" in " ".join(x for _, x in m)
 m = t5.processar(bx2(lb(23, 6)), [s_pts, s_reb]); assert "fora do jogo" in " ".join(x for _, x in m)
-m = t5.processar(bx2(lb(25, 6)), [s_pts, s_reb]); assert any("LINHA BATIDA" in x for _, x in m)  # volta a bater
+m = t5.processar(bx2(lb(25, 6)), [s_pts, s_reb]); assert any(x.startswith("✅") for _, x in m)  # volta a bater
 # --- under ---
 su = Sub(30, 600, "LeBron James", "pts", 24.5, None, "under")   # margem 3
 t6 = Tracker()
 t6.processar(bx2(lb(18)), [su])
-m = t6.processar(bx2(lb(20)), [su]); print(m[0][1]); assert "pode fazer mais 4" in m[0][1]
-m = t6.processar(bx2(lb(22)), [su]); print(m[0][1]); assert "CUIDADO COM O UNDER" in m[0][1] and "pode fazer mais 2" in m[0][1]
-m = t6.processar(bx2(lb(25)), [su]); print(m[0][1]); assert "UNDER PERDIDO" in m[0][1]
-m = t6.processar(bx2(lb(24)), [su]); print(m[0][1]); assert "volta a estar vivo" in m[0][1] and "não pode fazer mais nenhum" in m[0][1]
+m = t6.processar(bx2(lb(20)), [su]); print(m[0][1]); assert m[0][1] == "<b>LeBron James</b> +2 pontos → <b>20</b>/25", m
+m = t6.processar(bx2(lb(22)), [su]); print(m[0][1]); assert m[0][1].startswith("⚠️") and "22</b>/25" in m[0][1]
+m = t6.processar(bx2(lb(25)), [su]); print(m[0][1]); assert m[0][1].startswith("❌") and "25</b>/25" in m[0][1]
+m = t6.processar(bx2(lb(24)), [su]); print(m[0][1]); assert "Anulado" in m[0][1] and "volta a estar vivo" in m[0][1]
 fim6 = t6.processar(box(3, 4, "PT00M00.00S", lb(24), jogador(9, "Stephen", "Curry"), 99, 98), [su])
 print(fim6[0][1]); assert "menos de 24.5 ✅" in fim6[0][1]
 print("Testes da lógica OK")
