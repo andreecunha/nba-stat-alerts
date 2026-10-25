@@ -213,7 +213,7 @@ def criar_app(tg_app, api: dict) -> web.Application:
                     "valor": api["valor_de"](s.stat, st), "faltas": int(st.get("fouls", 0) or 0),
                     "em_campo": jp.get("emCampo") if game.get("gameStatus") == 2 else None,
                     "jogo": {"fora": equipa(game["awayTeam"], lg), "casa": equipa(game["homeTeam"], lg),
-                             "relogio": api["relogio"](game)}})
+                             "relogio": "HT" if api["relogio"](game) == "HALFTIME" else api["relogio"](game)}})
                 if STATS[s.stat].get("dd"):
                     item.update({"alvo_dd": STATS[s.stat]["dd"], "resumo": api["resumo_dd"](st)})
                 elif s.linha is not None:

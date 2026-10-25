@@ -233,4 +233,15 @@ assert len(banco) == 1 and banco[0].silencioso and "LeBron" in banco[0][1], m
 m = tc.processar(com_campo(copy.deepcopy(seq[1]), True), sc)
 assert sum("entrou em campo" in x for _, x in m) == 1
 print("Entrar / sair OK ✅")
+# --- intervalo ---
+from core import relogio, intervalo
+g_ht = {"gameStatus": 2, "period": 2, "gameClock": "PT00M00.00S"}
+assert intervalo(g_ht) and relogio(g_ht) == "HALFTIME"
+assert relogio({"gameStatus": 2, "period": 2, "gameClock": "PT00M35.00S"}) == "2.º P 0:35"
+assert relogio({"gameStatus": 2, "period": 3, "gameClock": "PT12M00.00S"}) == "3.º P 12:00"
+assert relogio({"gameStatus": 2, "period": 1, "gameClock": "PT00M00.00S"}) == "1.º P 0:00"
+ht = box_espn({"header": {"competitions": [{"status": {"period": 2, "displayClock": "0.0", "type": {"state": "in", "name": "STATUS_HALFTIME"}},
+                                            "competitors": []}]}}, "9")
+assert ht["game"]["intervalo"] and relogio(ht["game"]) == "HALFTIME"
+print("Intervalo OK ✅")
 print("Todos os testes passaram ✅")

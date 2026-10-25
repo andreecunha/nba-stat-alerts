@@ -43,7 +43,7 @@ def _ler_token() -> str:
     return token
 
 
-VERSAO = "2026-10-25 23:10 (chat curto)"
+VERSAO = "2026-10-25 23:20 (halftime)"
 TOKEN = _ler_token()
 INTERVALO = int(os.getenv("INTERVALO", "10"))  # segundos entre leituras
 PASTA_BOT = os.path.dirname(os.path.abspath(__file__))

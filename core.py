@@ -187,10 +187,21 @@ def encontrar(jogadores: list[dict], consulta: str) -> list[dict]:
     return [p for p in jogadores if bate(p)]
 
 
+def intervalo(game: dict) -> bool:
+    """Intervalo (halftime): a ESPN diz 'STATUS_HALFTIME', ou o 2.º período está a decorrer com o relógio a 0:00."""
+    if game.get("gameStatus") != 2:
+        return False
+    if game.get("intervalo"):
+        return True
+    return (game.get("period") or 0) == 2 and re.match(r"PT0+M0+\.", game.get("gameClock") or "") is not None
+
+
 def relogio(game: dict) -> str:
     estado = game.get("gameStatus")
     if estado == 3:
         return "Final"
+    if intervalo(game):
+        return "HALFTIME"
     periodo = game.get("period") or 0
     m = re.match(r"PT(\d+)M(\d+)", game.get("gameClock") or "")
     t = f"{int(m.group(1))}:{m.group(2)}" if m else ""
@@ -610,8 +621,14 @@ def jogo_espn(ev: dict) -> dict:
     return {"gameId": str(ev["id"]), "gameStatus": ESTADOS_ESPN.get(st.get("type", {}).get("state"), 1),
             "gameStatusText": st.get("type", {}).get("shortDetail", ""), "gameTimeUTC": ev.get("date"),
             "period": st.get("period", 0), "gameClock": _relogio_espn(st.get("displayClock")),
+            "intervalo": _e_intervalo(st),
             "homeTeam": eq.get("home", {"teamTricode": "?", "score": 0}),
             "awayTeam": eq.get("away", {"teamTricode": "?", "score": 0})}
+
+
+def _e_intervalo(st: dict) -> bool:
+    tipo = st.get("type", {})
+    return tipo.get("name") == "STATUS_HALFTIME" or str(tipo.get("description", "")).lower() == "halftime"
 
 
 _ENTRA = re.compile(r"^\s*(.+?) enters the game for (.+?)\.?\s*$", re.I)
@@ -679,7 +696,8 @@ def box_espn(summary: dict, gid: str) -> dict:
         eq.setdefault(lado, {"teamTricode": "?", "score": 0})["players"] = []
     lado_de = {v["teamTricode"]: k for k, v in eq.items()}
     ao_vivo = st.get("type", {}).get("state") == "in"
-    campo = em_campo_espn(summary) if ao_vivo else {}
+    no_intervalo = _e_intervalo(st) or (st.get("period") == 2 and _relogio_espn(st.get("displayClock")) == "PT00M00.00S")
+    campo = em_campo_espn(summary) if ao_vivo and not no_intervalo else {}   # no intervalo ninguém está em campo
     for bloco in summary.get("boxscore", {}).get("players", []):
         abrev = bloco.get("team", {}).get("abbreviation", "?")
         lado = lado_de.get(ESPN_PARA_NBA.get(abrev, abrev))
@@ -708,6 +726,7 @@ def box_espn(summary: dict, gid: str) -> dict:
                     "emCampo": campo.get(str(a.get("athlete", {}).get("id", "")))})
     return {"game": {"gameId": gid, "gameStatus": ESTADOS_ESPN.get(st.get("type", {}).get("state"), 1),
                      "period": st.get("period", 0), "gameClock": _relogio_espn(st.get("displayClock")),
+                     "intervalo": no_intervalo and ao_vivo,
                      "homeTeam": eq["home"], "awayTeam": eq["away"]}}
 
 
