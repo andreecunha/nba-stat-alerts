@@ -45,6 +45,15 @@ LAL 95–90 GSW · 4.º P 8:02
 - **Multiutilizador**: cada pessoa tem a sua lista; funciona também em grupos
 - Sem barra: basta escrever `jokic ressaltos 11.5`
 
+## 📱 Mini App
+
+Além do chat, o bot tem uma app dentro do Telegram (botão **📱 Abrir app** ao lado da caixa de texto):
+jogos de hoje com logos, plantéis com fotos e lesões, procura de jogadores, seletor da linha com régua e a
+média dos últimos 5 jogos, análise com gráfico e a tua lista de apostas. Os alertas continuam a chegar no chat.
+
+A app é servida pelo próprio bot (`webapp.py` + `app/index.html`) e precisa de HTTPS — no Fly.io fica em
+`https://<nome-da-app>.fly.dev/app` e o bot configura o botão sozinho. Noutro alojamento, define `WEBAPP_URL`.
+
 ## Como usar
 
 Tudo funciona com botões, sem comandos. O menu fica fixo em baixo:
@@ -98,6 +107,7 @@ Instala tudo e cria um serviço `systemd` que arranca sozinho.
 | `INTERVALO` | `20` | Segundos entre leituras dos jogos |
 | `DB_PATH` | `subs.db` | Onde guardar as listas |
 | `REMOVER_APOS` | `10` | Minutos depois do fim do jogo até o jogador sair da lista |
+| `WEBAPP_URL` | `https://<FLY_APP_NAME>.fly.dev/app` | Endereço da Mini App (tem de ser HTTPS) |
 
 ## Como funciona
 
@@ -108,6 +118,8 @@ Instala tudo e cria um serviço `systemd` que arranca sozinho.
 - **Guardar as listas**: SQLite
 
 ```
+webapp.py     servidor da Mini App (API + página), com validação do initData do Telegram
+app/          página da Mini App e letra Barlow (licença SIL OFL, ver app/fontes/OFL.txt)
 analise.py    histórico jogo a jogo (gamelog da ESPN) e dados da análise
 analise_img.py  gráfico da análise (Pillow)
 fontes/       letra Inter (licença SIL OFL, ver fontes/OFL.txt)

@@ -13,7 +13,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from telegram.error import BadRequest
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, ReplyKeyboardMarkup, Update
+from telegram import (BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, MenuButtonWebApp,
+                      ReplyKeyboardMarkup, Update, WebAppInfo)
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 import io
@@ -21,9 +22,11 @@ import math
 
 import analise
 import analise_img
-from core import (norm, STATS, Sub, Tracker, alvo, box_espn, calendario_espn, confronto, cores, descr_linha, encontrar,
+import webapp
+from types import SimpleNamespace
+from core import (ESPN_PARA_NBA, norm, STATS, Sub, Tracker, alvo, box_espn, calendario_espn, confronto, cores, descr_linha, encontrar,
                   falta_dd, jogadores_espn, jogo_espn, linha_stats, marcador, nome_completo, parse_add, parse_seguir,
-                  proximo_jogo, quando, resumo_dd, situacao_linha, texto_pedidos, valor_de, _numero)
+                  proximo_jogo, quando, relogio, resumo_dd, _data, situacao_linha, texto_pedidos, valor_de, _numero)
 
 def _ler_token() -> str:
     """Token da variável TELEGRAM_TOKEN ou, se não existir, do ficheiro token.txt ao lado do bot."""
@@ -40,12 +43,14 @@ def _ler_token() -> str:
     return token
 
 
-VERSAO = "2026-10-25 19:50 (linha só +1/-1)"
+VERSAO = "2026-10-25 20:30 (mini app)"
 TOKEN = _ler_token()
 INTERVALO = int(os.getenv("INTERVALO", "20"))  # segundos entre leituras
 PASTA_BOT = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.getenv("DB_PATH", os.path.join(PASTA_BOT, "subs.db"))
-REMOVER_APOS = int(os.getenv("REMOVER_APOS", "10"))  # minutos depois do fim do jogo até sair da lista
+REMOVER_APOS = int(os.getenv("REMOVER_APOS", "10"))
+# Endereço da Mini App (no Fly é https://<app>.fly.dev/app). Sem HTTPS, o Telegram não abre a app.
+WEBAPP_URL = os.getenv("WEBAPP_URL") or (f"https://{os.getenv('FLY_APP_NAME')}.fly.dev/app" if os.getenv("FLY_APP_NAME") else "")  # minutos depois do fim do jogo até sair da lista
 
 # Dados ao vivo da ESPN (o cdn.nba.com bloqueia pedidos a partir de alguns países/redes).
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
@@ -123,6 +128,17 @@ class Dados:
         valor = [p for lista in listas for p in lista]
         self.cache["jogadores"] = (time.time(), valor)
         return valor
+
+    async def logos(self) -> dict[str, str]:
+        """Sigla da equipa -> URL do logo (da própria ESPN)."""
+        equipas = (await self._json(ESPN_EQUIPAS, 24 * 3600))["sports"][0]["leagues"][0]["teams"]
+        out = {}
+        for e in equipas:
+            t = e["team"]
+            abrev = ESPN_PARA_NBA.get(t.get("abbreviation", ""), t.get("abbreviation", ""))
+            if t.get("logos"):
+                out[abrev] = t["logos"][0].get("href", "")
+        return out
 
     async def gamelog(self, athlete_id: str, epoca: int) -> list[dict]:
         """Jogos de uma época de um jogador (já convertidos). Épocas passadas ficam 12 h em cache."""
@@ -349,6 +365,9 @@ TECLADO_INICIO = InlineKeyboardMarkup([
     [InlineKeyboardButton("🏀 Ver jogos de hoje", callback_data="menu:jogos"),
      InlineKeyboardButton("🔎 Procurar jogador", callback_data="menu:procurar")],
     [InlineKeyboardButton("Agora não", callback_data="fechar")]])
+if WEBAPP_URL:
+    TECLADO_INICIO = InlineKeyboardMarkup([[InlineKeyboardButton("📱 Abrir a app", web_app=WebAppInfo(WEBAPP_URL))]]
+                                          + list(TECLADO_INICIO.inline_keyboard))
 PERGUNTA_INICIO = "O que queres fazer? Escolher pelo jogo ou procurar um jogador pelo nome?"
 
 
@@ -836,9 +855,9 @@ def sub_por_id(sub_id: int, chat_id: int) -> Sub | None:
     return next((s for s in subs_de(chat_id) if s.id == sub_id), None)
 
 
-async def fazer_analise(dados: Dados, s: Sub):
-    """Devolve (imagem PNG em bytes, legenda) ou levanta ValueError com uma mensagem para o utilizador."""
-    achados = [p for p in encontrar(await dados.jogadores(), s.jogador) if p.get("id")]
+async def dados_analise(dados: Dados, nome: str, stat: str) -> dict:
+    """Histórico do jogador para a análise. Levanta ValueError com uma mensagem para o utilizador."""
+    achados = [p for p in encontrar(await dados.jogadores(), nome) if p.get("id")]
     if len(achados) != 1:
         raise ValueError("Não encontrei o histórico deste jogador.")
     p = achados[0]
@@ -867,11 +886,18 @@ async def fazer_analise(dados: Dados, s: Sub):
             log.warning("gamelog %s: %r", p["name"], erro)
         raise ValueError("Não consegui obter o histórico de jogos deste jogador agora.")
     jogos.sort(key=lambda g: g["data"], reverse=True)
-    ultimos, contra, min_rec, min_ep = analise.preparar(jogos, s.stat, adversario, epoca)
+    ultimos, contra, min_rec, min_ep = analise.preparar(jogos, stat, adversario, epoca)
+    return {"jogador": p, "adversario": adversario, "quando": quando_txt, "em_casa": jogo["casa"] == p["team"],
+            "ultimos": ultimos, "contra": contra, "min_rec": min_rec, "min_ep": min_ep}
 
+
+async def fazer_analise(dados: Dados, s: Sub):
+    """Devolve (imagem PNG em bytes, legenda) ou levanta ValueError com uma mensagem para o utilizador."""
+    a = await dados_analise(dados, s.jogador, s.stat)
+    p, adversario, ultimos, contra = a["jogador"], a["adversario"], a["ultimos"], a["contra"]
     img = await asyncio.to_thread(
         analise_img.gerar, p["name"], p["team"], adversario, STATS[s.stat]["nome"], s.linha, s.under,
-        ultimos, contra, min_rec, min_ep, quando_txt, False, jogo["casa"] == p["team"])
+        ultimos, contra, a["min_rec"], a["min_ep"], a["quando"], False, a["em_casa"])
     buf = io.BytesIO()
     await asyncio.to_thread(img.save, buf, "PNG")
     legenda = analise.resumo_texto(s.stat, s.linha, s.under, ultimos, contra, adversario)
@@ -1239,25 +1265,50 @@ async def ciclo(app: Application):
         await asyncio.sleep(INTERVALO)
 
 
-async def saude(reader, writer):
-    """Responde 'ok' a quem bater na porta (o Fly.io verifica se a app está viva)."""
-    try:
-        await reader.read(1024)
-        writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
-        await writer.drain()
-    finally:
-        writer.close()
+async def enviar_confirmacao(app: Application, chat_id: int, texto: str, sub: Sub):
+    """Confirmação no chat quando se segue pela Mini App (com o botão de análise)."""
+    teclado = None
+    if sub.linha is not None and not STATS[sub.stat].get("dd"):
+        teclado = InlineKeyboardMarkup([[InlineKeyboardButton("📊 Ver análise", callback_data=f"an:{sub.id}")]])
+    await app.bot.send_message(chat_id, texto, parse_mode="HTML", reply_markup=teclado)
+
+
+def remover_sub(chat_id: int, sub_id: int):
+    with db() as con:
+        con.execute("DELETE FROM subs WHERE id = ? AND chat_id = ?", (sub_id, chat_id))
+
+
+async def iniciar_web(app: Application):
+    """Servidor da Mini App (e da verificação de saúde do Fly)."""
+    from aiohttp import web as _web
+    api = {
+        "token": TOKEN, "STATS": STATS, "agora": lambda: datetime.now(timezone.utc), "relogio": relogio,
+        "quando": quando, "data": _data, "nome_completo": nome_completo, "encontrar": encontrar,
+        "subs_de": subs_de, "estado": estado, "fins": fins, "ctx": lambda: SimpleNamespace(application=app),
+        "criar_sub": criar_sub, "remover": remover_sub, "media_recente": media_recente,
+        "linha_inicial": linha_inicial, "dados_analise": dados_analise,
+        "enviar_confirmacao": lambda chat_id, texto, sub: enviar_confirmacao(app, chat_id, texto, sub),
+    }
+    runner = _web.AppRunner(webapp.criar_app(app, api), access_log=None)
+    await runner.setup()
+    porta = int(os.getenv("PORT", "8080"))
+    await _web.TCPSite(runner, "0.0.0.0", porta).start()
+    app.bot_data["web"] = runner
+    log.info("Mini App e verificação de saúde na porta %s (%s)", porta, WEBAPP_URL or "sem HTTPS: app desligada")
 
 
 async def ao_iniciar(app: Application):
     # No Fly.io (ou se PORT estiver definido) abre uma porta só para responder "ok" à verificação de saúde.
     if os.getenv("PORT") or os.getenv("FLY_APP_NAME"):
-        porta = int(os.getenv("PORT", "8080"))
-        app.bot_data["saude"] = await asyncio.start_server(saude, "0.0.0.0", porta)
-        log.info("Verificação de saúde na porta %s", porta)
+        await iniciar_web(app)
     app.bot_data["dados"] = Dados(httpx.AsyncClient(headers=HEADERS, timeout=15))
     app.bot_data["tracker"] = Tracker()
     await app.bot.delete_my_commands()   # tudo funciona com botões; os comandos continuam a existir, escondidos
+    if WEBAPP_URL:
+        try:  # botão "Abrir app" ao lado da caixa de texto, em todas as conversas
+            await app.bot.set_chat_menu_button(menu_button=MenuButtonWebApp("📱 Abrir app", WebAppInfo(WEBAPP_URL)))
+        except Exception as e:
+            log.warning("botão da Mini App: %s", e)
     app.bot_data["ciclo"] = asyncio.get_running_loop().create_task(ciclo(app))
 
 

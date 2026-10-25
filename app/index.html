@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>NBA Alerts</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+@font-face { font-family: "Barlow"; font-weight: 400; src: url("/app/fontes/barlow-latin-400-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow"; font-weight: 500; src: url("/app/fontes/barlow-latin-500-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow"; font-weight: 600; src: url("/app/fontes/barlow-latin-600-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow"; font-weight: 700; src: url("/app/fontes/barlow-latin-700-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; src: url("/app/fontes/barlow-condensed-latin-600-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("/app/fontes/barlow-condensed-latin-700-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; font-weight: 800; src: url("/app/fontes/barlow-condensed-latin-800-normal.woff2") format("woff2"); font-display: swap; }
+
+:root {
+  --noite: #0e142c;      /* fundo, o mesmo da foto do bot */
+  --painel: #18203f;
+  --painel-2: #212a4f;
+  --risca: #2c365c;
+  --texto: #ffffff;
+  --suave: #96a0be;
+  --nba: #e61e32;        /* vermelho do "NBA" */
+  --bate: #26c470;       /* linha batida */
+  --falha: #e84855;      /* linha falhada */
+  --linha: #ffc43d;      /* a linha da aposta */
+  --cond: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --corpo: "Barlow", system-ui, sans-serif;
+  --raio: 14px;
+  --abaixo: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--noite); color: var(--texto); font-family: var(--corpo); font-size: 16px; }
+body { min-height: 100vh; padding-bottom: calc(76px + var(--abaixo)); overscroll-behavior: none; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--linha); outline-offset: 2px; }
+img { display: block; }
+.esconder { display: none !important; }
+
+/* ---------- cabeçalho ---------- */
+.topo { display: flex; align-items: baseline; justify-content: space-between; padding: 18px 18px 10px; }
+.marca { font-family: var(--cond); font-weight: 800; font-size: 30px; line-height: 1; letter-spacing: .01em; }
+.marca b { color: var(--nba); font-weight: 800; }
+.saudacao { color: var(--suave); font-size: 14px; }
+h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 18px 10px; }
+
+/* ---------- separadores em baixo ---------- */
+.abas { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr);
+        background: rgba(14, 20, 44, .96); border-top: 1px solid var(--risca); padding-bottom: var(--abaixo);
+        backdrop-filter: blur(8px); z-index: 20; }
+.aba { padding: 10px 0 12px; display: grid; justify-items: center; gap: 2px; color: var(--suave); font-size: 13px; font-weight: 600; }
+.aba span:first-child { font-size: 21px; line-height: 1.1; }
+.aba[aria-selected="true"] { color: var(--texto); }
+.aba[aria-selected="true"] span:first-child { filter: none; }
+.aba { position: relative; }
+.aba .conta { position: absolute; top: 6px; left: calc(50% + 10px); background: var(--nba); color: #fff; font-size: 11px;
+              font-style: normal; font-weight: 700; border-radius: 9px; padding: 0 6px; line-height: 17px; }
+
+/* ---------- jogos ---------- */
+.jogos { display: grid; gap: 10px; padding: 0 14px; }
+.jogo { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; text-align: left;
+        background: var(--painel); border-radius: var(--raio); padding: 14px 14px; width: 100%; }
+.equipa { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.equipa.casa { flex-direction: row-reverse; text-align: right; }
+.logo { width: 38px; height: 38px; object-fit: contain; flex: none; }
+.tri { font-family: var(--cond); font-weight: 700; font-size: 22px; }
+.pontos { font-family: var(--cond); font-weight: 800; font-size: 28px; font-variant-numeric: tabular-nums; }
+.meio { text-align: center; min-width: 96px; }
+.meio .resultado { font-family: var(--cond); font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; }
+.meio .detalhe { color: var(--suave); font-size: 13px; margin-top: 2px; }
+.vivo { color: var(--texto); }
+.vivo::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--nba);
+                margin-right: 6px; vertical-align: 1px; animation: pulsa 1.6s ease-in-out infinite; }
+@keyframes pulsa { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .vivo::before { animation: none; } }
+
+/* ---------- marcador do jogo aberto ---------- */
+.marcador { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin: 4px 14px 0;
+            padding: 16px 12px; background: var(--painel); border-radius: var(--raio); }
+.marcador .lado { display: grid; justify-items: center; gap: 4px; }
+.marcador .logo { width: 52px; height: 52px; }
+.marcador .centro { text-align: center; }
+.marcador .centro .resultado { font-family: var(--cond); font-weight: 800; font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+.marcador .centro .detalhe { color: var(--suave); font-size: 14px; margin-top: 4px; }
+
+.segmento { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; margin: 14px 14px 8px;
+            background: var(--painel); border-radius: 12px; }
+.segmento button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 6px; border-radius: 9px;
+                   font-family: var(--cond); font-weight: 700; font-size: 19px; color: var(--suave); }
+.segmento button[aria-pressed="true"] { background: var(--painel-2); color: var(--texto); }
+.segmento img { width: 22px; height: 22px; object-fit: contain; }
+.aviso { color: var(--suave); font-size: 14px; margin: 2px 18px 8px; }
+
+/* ---------- jogadores ---------- */
+.jogadores { padding: 0 14px; display: grid; }
+.jogador { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 12px; padding: 10px 4px;
+           border-bottom: 1px solid var(--risca); text-align: left; width: 100%; }
+.jogador:last-child { border-bottom: 0; }
+.foto { width: 48px; height: 48px; border-radius: 50%; background: var(--painel-2); }
+.rosto { position: relative; overflow: hidden; display: grid; place-items: center; }
+.rosto span { font-family: var(--cond); font-weight: 700; font-size: 18px; color: var(--suave); }
+.rosto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.quem .rosto span { font-size: 24px; }
+.nome { font-weight: 600; font-size: 16px; }
+.sub { color: var(--suave); font-size: 14px; margin-top: 2px; }
+.sub strong { color: var(--texto); font-weight: 600; }
+.lesao { color: var(--falha); font-weight: 600; }
+.jogador.inativo { opacity: .45; }
+.mais { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--painel);
+        font-size: 22px; line-height: 1; color: var(--suave); }
+
+/* ---------- procurar ---------- */
+.caixa { margin: 4px 14px 6px; position: relative; }
+.caixa input { width: 100%; font: inherit; font-size: 17px; color: var(--texto); background: var(--painel);
+               border: 1px solid var(--risca); border-radius: 12px; padding: 13px 14px 13px 42px; }
+.caixa input::placeholder { color: var(--suave); }
+.caixa::before { content: "🔎"; position: absolute; left: 14px; top: 13px; font-size: 16px; opacity: .8; }
+
+/* ---------- lista ---------- */
+.aposta { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: start; margin: 0 14px 10px;
+          padding: 14px; background: var(--painel); border-radius: var(--raio); }
+.aposta .titulo { font-weight: 700; font-size: 17px; }
+.etiqueta { display: inline-block; margin-top: 6px; font-family: var(--cond); font-weight: 700; font-size: 17px;
+            padding: 2px 9px; border-radius: 7px; background: var(--nba); }
+.etiqueta.under { background: #3b4a8a; }
+.etiqueta.sem { background: var(--painel-2); color: var(--suave); }
+.aposta .estado { grid-column: 1 / -1; color: var(--suave); font-size: 14px; white-space: pre-line; }
+.tirar { width: 34px; height: 34px; border-radius: 50%; background: var(--painel-2); color: var(--suave); font-size: 18px; }
+
+.vazio { margin: 40px 24px; text-align: center; color: var(--suave); line-height: 1.5; }
+.vazio button { margin-top: 14px; }
+.botao { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 20px; border-radius: 12px;
+         font-weight: 700; font-size: 16px; background: var(--painel-2); }
+.botao.principal { background: var(--nba); color: #fff; }
+.botao:disabled { opacity: .5; }
+.carregar { margin: 30px auto; width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--risca);
+            border-top-color: var(--texto); animation: roda .8s linear infinite; }
+@keyframes roda { to { transform: rotate(360deg); } }
+
+/* ---------- folha do jogador (de baixo para cima) ---------- */
+.fundo { position: fixed; inset: 0; background: rgba(4, 7, 18, .6); z-index: 30; opacity: 0; transition: opacity .2s; }
+.fundo.aberto { opacity: 1; }
+.folha { position: fixed; left: 0; right: 0; bottom: 0; z-index: 31; max-height: 92vh; overflow-y: auto;
+         background: var(--noite); border-radius: 20px 20px 0 0; border-top: 1px solid var(--risca);
+         padding: 8px 16px calc(20px + var(--abaixo)); transform: translateY(100%); transition: transform .25s ease-out; }
+.folha.aberto { transform: none; }
+@media (prefers-reduced-motion: reduce) { .folha, .fundo { transition: none; } }
+.pega { width: 40px; height: 4px; border-radius: 2px; background: var(--risca); margin: 2px auto 12px; }
+.quem { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; }
+.quem .foto { width: 64px; height: 64px; }
+.logo-p { width: 20px; height: 20px; object-fit: contain; }
+.quem .nome { font-family: var(--cond); font-weight: 800; font-size: 28px; line-height: 1; }
+.rotulo { color: var(--suave); font-size: 14px; font-weight: 600; margin: 18px 0 8px; }
+.fichas { display: flex; flex-wrap: wrap; gap: 7px; }
+.ficha { padding: 8px 12px; border-radius: 10px; background: var(--painel); font-weight: 600; font-size: 15px; color: var(--suave); }
+.ficha[aria-pressed="true"] { background: var(--texto); color: var(--noite); }
+.lados { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.lados button { padding: 11px 6px; border-radius: 10px; background: var(--painel); font-weight: 700; color: var(--suave); }
+.lados button[aria-pressed="true"][data-lado="over"] { background: var(--nba); color: #fff; }
+.lados button[aria-pressed="true"][data-lado="under"] { background: #3b4a8a; color: #fff; }
+.lados button[aria-pressed="true"][data-lado="sem"] { background: var(--painel-2); color: #fff; }
+
+/* O seletor da linha: o número grande de pavilhão e a régua com a média. */
+.linha-caixa { margin-top: 6px; padding: 16px 14px 12px; background: var(--painel); border-radius: var(--raio); }
+.placar { display: grid; grid-template-columns: 56px 1fr 56px; align-items: center; }
+.placar button { width: 56px; height: 56px; border-radius: 50%; background: var(--painel-2); font-size: 30px; font-weight: 600; line-height: 1; }
+.numero { text-align: center; font-family: var(--cond); font-weight: 800; font-size: 72px; line-height: .9;
+          font-variant-numeric: tabular-nums; color: var(--linha); letter-spacing: .01em; }
+.numero small { display: block; font-family: var(--corpo); font-weight: 500; font-size: 14px; color: var(--suave); letter-spacing: 0; margin-top: 8px; }
+.regua { position: relative; margin: 18px 4px 2px; height: 36px; }
+.regua .riscos { position: absolute; left: 0; right: 0; top: 10px; height: 16px;
+                 background-image: linear-gradient(90deg, #4a5585 0 2px, transparent 2px), linear-gradient(90deg, var(--risca) 0 1px, transparent 1px);
+                 background-size: var(--cinco) 16px, var(--um) 8px; background-repeat: repeat-x; background-position: 0 0, 0 4px; }
+.regua .media { position: absolute; top: 2px; width: 2px; height: 32px; background: var(--texto); transform: translateX(-1px); }
+.regua .media::after { content: attr(data-texto); position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
+                       font-size: 12px; color: var(--suave); white-space: nowrap; }
+.regua input { position: absolute; inset: 0; width: 100%; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; }
+.regua input::-webkit-slider-runnable-track { height: 36px; background: transparent; }
+.regua input::-moz-range-track { height: 36px; background: transparent; }
+.regua input::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 36px; border-radius: 3px; background: var(--linha);
+                                     box-shadow: 0 0 0 4px rgba(255, 196, 61, .25); }
+.regua input::-moz-range-thumb { width: 6px; height: 36px; border: 0; border-radius: 3px; background: var(--linha); }
+.acoes { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 18px; }
+
+/* ---------- análise ---------- */
+.analise { margin-top: 16px; display: grid; gap: 10px; }
+.grafico { background: var(--painel); border-radius: var(--raio); padding: 14px 12px 10px; }
+.grafico .cab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.grafico .cab b { font-family: var(--cond); font-weight: 700; font-size: 19px; }
+.grafico .cab span { font-family: var(--cond); font-weight: 800; font-size: 24px; }
+.barras { position: relative; height: 130px; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; align-items: end; }
+.barra { position: relative; border-radius: 6px 6px 3px 3px; }
+.barra.bate { background: var(--bate); }
+.barra.falha { background: var(--falha); }
+.barra i { position: absolute; top: -20px; left: 0; right: 0; text-align: center; font-style: normal;
+           font-family: var(--cond); font-weight: 800; font-size: 17px; }
+.traco { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--linha); pointer-events: none; }
+.rotulos { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; margin-top: 6px; text-align: center; }
+.rotulos div { font-size: 12px; color: var(--suave); line-height: 1.3; }
+.rotulos div b { display: block; color: var(--texto); font-weight: 600; font-size: 13px; }
+.numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.numeros div { background: var(--painel); border-radius: 12px; padding: 10px 4px; text-align: center; color: var(--suave); font-size: 12px; }
+.numeros div b { display: block; color: var(--texto); font-family: var(--cond); font-weight: 800; font-size: 24px; }
+.assinatura { text-align: center; color: var(--suave); font-size: 12px; margin-top: 2px; }
+.assinatura b { color: var(--nba); }
+
+/* ---------- aviso rápido ---------- */
+.toast { position: fixed; left: 14px; right: 14px; bottom: calc(86px + var(--abaixo)); z-index: 40; padding: 13px 16px;
+         border-radius: 12px; background: var(--texto); color: var(--noite); font-weight: 600; text-align: center;
+         transform: translateY(20px); opacity: 0; transition: .2s; pointer-events: none; }
+.toast.ver { transform: none; opacity: 1; }
+</style>
+</head>
+<body>
+<header class="topo">
+  <div class="marca"><b>NBA</b> ALERTS</div>
+  <div class="saudacao" id="saudacao"></div>
+</header>
+
+<main id="ecra"></main>
+
+<nav class="abas" role="tablist">
+  <button class="aba" role="tab" data-aba="jogos" aria-selected="true"><span>🏀</span><span>Jogos</span></button>
+  <button class="aba" role="tab" data-aba="procurar" aria-selected="false"><span>🔎</span><span>Procurar</span></button>
+  <button class="aba" role="tab" data-aba="lista" aria-selected="false"><span>📋</span><span>A minha lista</span><i class="conta esconder" id="conta"></i></button>
+</nav>
+
+<div class="fundo esconder" id="fundo"></div>
+<section class="folha esconder" id="folha" role="dialog" aria-modal="true"></section>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#0e142c"); tg.setBackgroundColor("#0e142c"); } catch (e) {} }
+
+const GRANDES = ["pts", "pra", "pr", "pa", "ra"];
+const S = { aba: "jogos", stats: [], jogo: null, equipa: 0, folha: null, lista: [] };
+const ecra = document.getElementById("ecra");
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const vibra = tipo => { try { tg && tg.HapticFeedback[tipo === "ok" ? "notificationOccurred" : "selectionChanged"](tipo === "ok" ? "success" : undefined); } catch (e) {} };
+const fmt = n => (Math.round(n * 10) / 10).toString();
+
+async function api(caminho, opcoes = {}) {
+  const r = await fetch(caminho, { ...opcoes, headers: { "X-Init-Data": tg ? tg.initData : "", "Content-Type": "application/json" } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.erro || "Algo correu mal. Tenta outra vez.");
+  return j;
+}
+
+function toast(texto) {
+  const t = document.getElementById("toast");
+  t.textContent = texto; t.classList.add("ver");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("ver"), 2600);
+}
+const aCarregar = () => { ecra.innerHTML = '<div class="carregar" aria-label="A carregar"></div>'; };
+const erro = (msg, repetir) => {
+  ecra.innerHTML = `<div class="vazio">${esc(msg)}<br><button class="botao" id="repetir">Tentar outra vez</button></div>`;
+  document.getElementById("repetir").onclick = repetir;
+};
+const imagem = (src, classe, alt = "") => src ? `<img class="${classe}" src="${esc(src)}" alt="${esc(alt)}" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="${classe}"></div>`;
+const iniciais = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase();
+const foto = (src, nome, classe = "foto") => `<div class="${classe} rosto" aria-hidden="true"><span>${esc(iniciais(nome))}</span>${src
+  ? `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>`;
+
+/* ---------- navegação ---------- */
+function mudarAba(aba) {
+  S.aba = aba; S.jogo = null;
+  document.querySelectorAll(".aba").forEach(b => b.setAttribute("aria-selected", b.dataset.aba === aba));
+  if (tg) tg.BackButton.hide();
+  ({ jogos: verJogos, procurar: verProcurar, lista: verLista })[aba]();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll(".aba").forEach(b => b.onclick = () => { vibra(); mudarAba(b.dataset.aba); });
+if (tg) tg.BackButton.onClick(() => { if (S.folha) fecharFolha(); else if (S.jogo) mudarAba("jogos"); });
+
+/* ---------- jogos ---------- */
+async function verJogos() {
+  aCarregar();
+  let jogos;
+  try { jogos = await api("/api/jogos"); } catch (e) { return erro(e.message, verJogos); }
+  if (S.aba !== "jogos") return;
+  if (!jogos.length) { ecra.innerHTML = '<div class="vazio">Hoje não há jogos da NBA.<br>Podes procurar um jogador para o seguir no próximo jogo.</div>'; return; }
+  const vivos = jogos.filter(g => g.estado === 2).length;
+  ecra.innerHTML = `<h2>${vivos ? `${vivos} jogo${vivos > 1 ? "s" : ""} a decorrer` : "Jogos de hoje"}</h2>
+    <div class="jogos">${jogos.map(g => `
+      <button class="jogo" data-id="${esc(g.id)}">
+        <div class="equipa">${imagem(g.fora.logo, "logo")}<span class="tri">${esc(g.fora.tri)}</span></div>
+        <div class="meio">${g.estado === 1
+          ? `<div class="resultado" style="font-size:20px">${esc(hora(g.quando))}</div><div class="detalhe">${esc(dia(g.quando))}</div>`
+          : `<div class="resultado">${g.fora.score}–${g.casa.score}</div><div class="detalhe ${g.estado === 2 ? "vivo" : ""}">${g.estado === 2 ? esc(g.relogio) : "Final"}</div>`}
+        </div>
+        <div class="equipa casa">${imagem(g.casa.logo, "logo")}<span class="tri">${esc(g.casa.tri)}</span></div>
+      </button>`).join("")}</div>`;
+  ecra.querySelectorAll(".jogo").forEach(b => b.onclick = () => { vibra(); abrirJogo(b.dataset.id); });
+}
+const hora = q => (q.match(/às (\d\d:\d\d)/) || [, ""])[1];
+const dia = q => q.includes("amanhã") ? "amanhã" : q.startsWith("daqui") ? q.split(" (")[0] : "";
+
+async function abrirJogo(id) {
+  aCarregar(); window.scrollTo(0, 0);
+  if (tg) tg.BackButton.show();
+  try { S.jogo = await api("/api/jogo/" + encodeURIComponent(id)); } catch (e) { return erro(e.message, () => abrirJogo(id)); }
+  S.equipa = 0; desenharJogo();
+}
+
+function desenharJogo() {
+  const g = S.jogo, [f, c] = g.equipas, porComecar = g.estado === 1;
+  const e = g.equipas[S.equipa];
+  ecra.innerHTML = `
+    <div class="marcador">
+      <div class="lado">${imagem(f.logo, "logo")}<span class="tri">${esc(f.tri)}</span></div>
+      <div class="centro">${porComecar ? `<div class="resultado" style="font-size:30px">@</div><div class="detalhe">Ainda não começou</div>`
+        : `<div class="resultado">${f.score}–${c.score}</div><div class="detalhe ${g.estado === 2 ? "vivo" : ""}">${g.estado === 2 ? esc(g.relogio) : "Final"}</div>`}</div>
+      <div class="lado">${imagem(c.logo, "logo")}<span class="tri">${esc(c.tri)}</span></div>
+    </div>
+    <div class="segmento">${g.equipas.map((t, i) => `<button aria-pressed="${i === S.equipa}" data-i="${i}">${imagem(t.logo, "")}${esc(t.tri)}</button>`).join("")}</div>
+    ${porComecar ? '<p class="aviso">Plantel. Toca num jogador para o seguir.</p>' : '<p class="aviso">Toca num jogador para o seguir.</p>'}
+    <div class="jogadores">${e.jogadores.map((p, i) => `
+      <button class="jogador ${p.inativo ? "inativo" : ""}" data-i="${i}">
+        ${foto(p.foto, p.nome)}
+        <div><div class="nome">${esc(p.nome)}</div><div class="sub">${linhaJogador(p)}</div></div>
+        <span class="mais" aria-hidden="true">+</span>
+      </button>`).join("") || '<div class="vazio">Ainda não há plantel disponível.</div>'}</div>`;
+  ecra.querySelectorAll(".segmento button").forEach(b => b.onclick = () => { vibra(); S.equipa = +b.dataset.i; desenharJogo(); });
+  ecra.querySelectorAll(".jogador").forEach(b => b.onclick = () => {
+    const p = e.jogadores[+b.dataset.i]; abrirFolha({ nome: p.nome, foto: p.foto, equipa: e.tri, logo: e.logo });
+  });
+}
+
+function linhaJogador(p) {
+  if (p.inativo) return "Não joga";
+  if (p.stats) {
+    const s = p.stats, partes = [`<strong>${s.pts}</strong> pts`, `<strong>${s.reb}</strong> res`, `<strong>${s.ast}</strong> ast`];
+    if (s["3pt"]) partes.push(`<strong>${s["3pt"]}</strong> tri`);
+    partes.push(`${s.min} min`);
+    if (s.pf >= 4) partes.push(`<span class="lesao">${s.pf} faltas</span>`);
+    return partes.join("&ensp;");
+  }
+  return [p.pos ? esc(posicao(p.pos)) : "", p.lesao ? `<span class="lesao">🚑 ${esc(lesao(p.lesao))}</span>` : ""].filter(Boolean).join("&ensp;");
+}
+const posicao = p => ({ G: "Base/Extremo", PG: "Base", SG: "Extremo", F: "Extremo-poste", SF: "Extremo", PF: "Extremo-poste", C: "Poste" }[p] || p);
+const lesao = l => ({ "Out": "Fora", "Day-To-Day": "Em dúvida", "Questionable": "Em dúvida", "Doubtful": "Pouco provável" }[l] || l);
+
+/* ---------- procurar ---------- */
+function verProcurar() {
+  ecra.innerHTML = `<h2>Procurar jogador</h2>
+    <div class="caixa"><input id="q" type="search" placeholder="Nome, ex.: LeBron, Curry, Jokić" autocomplete="off" enterkeyhint="search"></div>
+    <div id="resultados" class="jogadores"><div class="vazio">Escreve pelo menos duas letras.</div></div>`;
+  const q = document.getElementById("q");
+  q.oninput = () => { clearTimeout(verProcurar.t); verProcurar.t = setTimeout(() => procurar(q.value), 250); };
+  setTimeout(() => q.focus(), 50);
+}
+async function procurar(texto) {
+  const caixa = document.getElementById("resultados");
+  if (texto.trim().length < 2) { caixa.innerHTML = '<div class="vazio">Escreve pelo menos duas letras.</div>'; return; }
+  let r;
+  try { r = await api("/api/procurar?q=" + encodeURIComponent(texto)); } catch (e) { caixa.innerHTML = `<div class="vazio">${esc(e.message)}</div>`; return; }
+  if (S.aba !== "procurar") return;
+  caixa.innerHTML = r.map((p, i) => `
+    <button class="jogador" data-i="${i}">${foto(p.foto, p.nome)}
+      <div><div class="nome">${esc(p.nome)}</div><div class="sub">${esc(p.team)}${p.pos ? "&ensp;" + esc(posicao(p.pos)) : ""}${p.lesao ? `&ensp;<span class="lesao">🚑 ${esc(lesao(p.lesao))}</span>` : ""}</div></div>
+      ${imagem(p.logo, "logo")}
+    </button>`).join("") || `<div class="vazio">Não encontrei ninguém com «${esc(texto)}».</div>`;
+  caixa.querySelectorAll(".jogador").forEach(b => b.onclick = () => {
+    const p = r[+b.dataset.i]; abrirFolha({ nome: p.nome, foto: p.foto, equipa: p.team, logo: p.logo });
+  });
+}
+
+/* ---------- lista ---------- */
+async function verLista() {
+  aCarregar();
+  try { S.lista = await api("/api/lista"); } catch (e) { return erro(e.message, verLista); }
+  if (S.aba !== "lista") return;
+  contar();
+  if (!S.lista.length) {
+    ecra.innerHTML = `<div class="vazio">Ainda não segues nenhuma aposta.<br>Escolhe um jogo ou procura um jogador.<br>
+      <button class="botao principal" id="irJogos">Ver jogos de hoje</button></div>`;
+    document.getElementById("irJogos").onclick = () => mudarAba("jogos"); return;
+  }
+  ecra.innerHTML = `<h2>A minha lista</h2>` + S.lista.map(a => `
+    <div class="aposta">
+      <div><div class="titulo">${esc(a.jogador)}</div>${etiqueta(a)}</div>
+      <button class="tirar" data-id="${a.id}" aria-label="Deixar de seguir ${esc(a.jogador)}">✕</button>
+      <div class="estado">${esc(a.estado.replace(/[🟢🔴🟡🟣🔵⚪⚫🟠🟤]/gu, "").replace(/ {2,}/g, " ").trim())}</div>
+    </div>`).join("");
+  ecra.querySelectorAll(".tirar").forEach(b => b.onclick = async () => {
+    try { await api("/api/lista/" + b.dataset.id, { method: "DELETE" }); vibra("ok"); toast("Deixaste de seguir"); verLista(); }
+    catch (e) { toast(e.message); }
+  });
+}
+function etiqueta(a) {
+  const nome = a.stat_nome.charAt(0).toUpperCase() + a.stat_nome.slice(1);
+  if (a.linha == null) return `<span class="etiqueta sem">${esc(nome)}</span>`;
+  return `<span class="etiqueta ${a.lado === "under" ? "under" : ""}">${a.lado === "under" ? "Under" : "Over"} ${fmt(a.linha)} ${esc(a.stat_nome)}</span>`;
+}
+function contar() {
+  const c = document.getElementById("conta");
+  c.textContent = S.lista.length; c.classList.toggle("esconder", !S.lista.length);
+}
+
+/* ---------- folha do jogador: estatística, over/under, linha, análise, seguir ---------- */
+function abrirFolha(j) {
+  vibra();
+  S.folha = { ...j, stat: "pts", lado: "over", linha: 19.5, media: null, analise: null };
+  document.getElementById("fundo").classList.remove("esconder");
+  const folha = document.getElementById("folha"); folha.classList.remove("esconder");
+  requestAnimationFrame(() => { document.getElementById("fundo").classList.add("aberto"); folha.classList.add("aberto"); });
+  if (tg) tg.BackButton.show();
+  desenharFolha(); carregarMedia();
+}
+function fecharFolha() {
+  S.folha = null;
+  const fundo = document.getElementById("fundo"), folha = document.getElementById("folha");
+  fundo.classList.remove("aberto"); folha.classList.remove("aberto");
+  setTimeout(() => { fundo.classList.add("esconder"); folha.classList.add("esconder"); }, 220);
+  if (tg && !S.jogo) tg.BackButton.hide();
+}
+document.getElementById("fundo").onclick = fecharFolha;
+
+async function carregarMedia() {
+  const f = S.folha, stat = f.stat;
+  const dd = (S.stats.find(s => s.id === stat) || {}).dd;
+  if (dd) { f.media = null; desenharFolha(); return; }
+  try {
+    const r = await api(`/api/media?jogador=${encodeURIComponent(f.nome)}&stat=${stat}`);
+    if (S.folha !== f || f.stat !== stat) return;
+    f.media = r.media; if (r.linha != null) f.linha = r.linha;
+  } catch (e) { f.media = null; }
+  desenharFolha();
+}
+
+function desenharFolha() {
+  const f = S.folha; if (!f) return;
+  const st = S.stats.find(s => s.id === f.stat) || { nome: f.stat };
+  const temLinha = !st.dd && f.lado !== "sem";
+  const max = Math.max(GRANDES.includes(f.stat) ? 60 : 20, Math.ceil(f.linha) + 5, Math.ceil(f.media || 0) + 5);
+  const pos = v => `${((v - 0.5) / max) * 100}%`;
+  document.getElementById("folha").innerHTML = `
+    <div class="pega"></div>
+    <div class="quem">${foto(f.foto, f.nome)}<div><div class="nome">${esc(f.nome)}</div>
+      <div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:6px">${imagem(f.logo, "logo-p")}${esc(f.equipa || "")}</div></div></div>
+
+    <div class="rotulo">Estatística</div>
+    <div class="fichas">${S.stats.map(s => `<button class="ficha" data-s="${s.id}" aria-pressed="${s.id === f.stat}">${esc(s.nome.charAt(0).toUpperCase() + s.nome.slice(1))}</button>`).join("")}</div>
+
+    ${st.dd ? "" : `
+    <div class="rotulo">Aposta</div>
+    <div class="lados">
+      <button data-lado="over" aria-pressed="${f.lado === "over"}">Over</button>
+      <button data-lado="under" aria-pressed="${f.lado === "under"}">Under</button>
+      <button data-lado="sem" aria-pressed="${f.lado === "sem"}">Sem linha</button>
+    </div>`}
+
+    ${temLinha ? `
+    <div class="linha-caixa">
+      <div class="placar">
+        <button id="menos" aria-label="Linha menos 1">−</button>
+        <div class="numero">${fmt(f.linha)}<small>${f.lado === "under" ? "menos de" : "mais de"} ${fmt(f.linha)} ${esc(st.nome)}</small></div>
+        <button id="maisum" aria-label="Linha mais 1">+</button>
+      </div>
+      <div class="regua">
+        <div class="riscos" style="--um:${100 / max}%; --cinco:${100 / max * 5}%"></div>
+        ${f.media != null ? `<div class="media" style="left:${pos(Math.min(f.media, max))}" data-texto="média ${fmt(f.media)}"></div>` : ""}
+        <input id="regua" type="range" min="0" max="${max - 1}" step="1" value="${f.linha - 0.5}" aria-label="Linha da aposta">
+      </div>
+    </div>` : st.dd ? `<p class="sub" style="margin-top:14px">Avisa quando cada categoria chega aos 10 e quando completa o ${esc(st.nome)}.</p>`
+             : `<p class="sub" style="margin-top:14px">Recebes um aviso a cada ${esc(st.nome)} do jogador, sem linha.</p>`}
+
+    <div class="acoes" style="${temLinha ? "" : "grid-template-columns:1fr"}">
+      ${temLinha ? `<button class="botao" id="verAnalise">📊 Análise</button>` : ""}
+      <button class="botao principal" id="seguir">Seguir</button>
+    </div>
+    <div id="analise">${f.analise ? desenharAnalise(f.analise, f) : ""}</div>`;
+
+  const folha = document.getElementById("folha");
+  folha.querySelectorAll(".ficha").forEach(b => b.onclick = () => { vibra(); f.stat = b.dataset.s; f.analise = null; desenharFolha(); carregarMedia(); });
+  folha.querySelectorAll(".lados button").forEach(b => b.onclick = () => { vibra(); f.lado = b.dataset.lado; desenharFolha(); });
+  const muda = d => { f.linha = Math.max(0.5, f.linha + d); vibra(); desenharFolha(); };
+  if (temLinha) {
+    document.getElementById("menos").onclick = () => muda(-1);
+    document.getElementById("maisum").onclick = () => muda(+1);
+    const r = document.getElementById("regua");
+    r.oninput = () => { f.linha = +r.value + 0.5; vibra();
+      folha.querySelector(".numero").firstChild.textContent = fmt(f.linha);
+      folha.querySelector(".numero small").textContent = `${f.lado === "under" ? "menos de" : "mais de"} ${fmt(f.linha)} ${st.nome}`;
+      if (f.analise) document.getElementById("analise").innerHTML = desenharAnalise(f.analise, f); };
+    r.onchange = () => desenharFolha();
+    document.getElementById("verAnalise").onclick = carregarAnalise;
+  }
+  document.getElementById("seguir").onclick = seguir;
+}
+
+async function carregarAnalise() {
+  const f = S.folha, caixa = document.getElementById("analise");
+  caixa.innerHTML = '<div class="carregar"></div>';
+  try { f.analise = await api(`/api/analise?jogador=${encodeURIComponent(f.nome)}&stat=${f.stat}`); }
+  catch (e) { caixa.innerHTML = `<p class="sub" style="margin-top:14px">${esc(e.message)}</p>`; return; }
+  if (S.folha !== f) return;
+  caixa.innerHTML = desenharAnalise(f.analise, f);
+  caixa.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function desenharAnalise(a, f) {
+  const linha = f.linha, under = f.lado === "under";
+  const bate = v => under ? v < linha : v > linha;
+  const grafico = (titulo, jogos) => {
+    if (!jogos.length) return `<div class="grafico"><div class="cab"><b>${esc(titulo)}</b></div><p class="sub">Sem jogos recentes.</p></div>`;
+    const vmax = Math.max(linha, ...jogos.map(j => j.v)) * 1.2 || 1;
+    const n = jogos.filter(j => bate(j.v)).length;
+    const cor = n * 2 > jogos.length ? "var(--bate)" : n * 2 === jogos.length ? "var(--linha)" : "var(--falha)";
+    return `<div class="grafico">
+      <div class="cab"><b>${esc(titulo)}</b><span style="color:${cor}">${n}/${jogos.length}</span></div>
+      <div class="barras">${jogos.map(j => `<div class="barra ${bate(j.v) ? "bate" : "falha"}" style="height:${Math.max(2, j.v / vmax * 100)}%"><i>${j.v}</i></div>`).join("")}
+        <div class="traco" style="bottom:${linha / vmax * 100}%"></div></div>
+      <div class="rotulos">${jogos.map(j => `<div><b>${esc(j.rot)}</b>${esc(j.data)}</div>`).join("")}</div>
+    </div>`;
+  };
+  const dif = a.min_rec - a.min_ep;
+  return `<div class="analise">
+    ${grafico(`Últimos ${a.ultimos.length} jogos`, a.ultimos)}
+    ${grafico(`Contra ${a.adversario}`, a.contra)}
+    <div class="numeros">
+      <div><b>${a.media ?? "–"}</b>média</div><div><b>${a.mediana ?? "–"}</b>mediana</div>
+      <div><b>${a.min ?? "–"}–${a.max ?? "–"}</b>mín–máx</div>
+      <div><b>${a.min_rec}${Math.abs(dif) >= 1 ? `<small style="font-size:15px"> ${dif > 0 ? "+" : ""}${dif}</small>` : ""}</b>minutos</div>
+    </div>
+    <div class="assinatura">Powered by <b>André Cunha Analytics</b></div>
+  </div>`;
+}
+
+async function seguir() {
+  const f = S.folha, st = S.stats.find(s => s.id === f.stat) || {};
+  const corpo = { jogador: f.nome, stat: f.stat,
+                  linha: st.dd || f.lado === "sem" ? null : f.linha, lado: f.lado === "under" ? "under" : "over" };
+  const b = document.getElementById("seguir"); b.disabled = true;
+  try {
+    const r = await api("/api/seguir", { method: "POST", body: JSON.stringify(corpo) });
+    vibra("ok"); toast(r.repetida ? "Já está na tua lista" : "A seguir. Os avisos chegam no chat.");
+    fecharFolha(); api("/api/lista").then(l => { S.lista = l; contar(); }).catch(() => {});
+  } catch (e) { toast(e.message); b.disabled = false; }
+}
+
+/* ---------- arranque ---------- */
+(async () => {
+  const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+  if (u) document.getElementById("saudacao").textContent = "Olá, " + u.first_name;
+  try { S.stats = (await api("/api/config")).stats; } catch (e) {
+    ecra.innerHTML = `<div class="vazio">${esc(e.message)}</div>`; return;
+  }
+  api("/api/lista").then(l => { S.lista = l; contar(); }).catch(() => {});
+  verJogos();
+})();
+</script>
+</body>
+</html>

@@ -576,6 +576,7 @@ def box_espn(summary: dict, gid: str) -> dict:
                     elif label == "PF":
                         stats["fouls"] = _int(valor)
                 eq[lado]["players"].append({
+                    "id": str(a.get("athlete", {}).get("id", "")),
                     "name": nome, "firstName": partes[0], "familyName": partes[1] if len(partes) > 1 else "",
                     "status": "INACTIVE" if a.get("didNotPlay") else "ACTIVE",
                     "notPlayingReason": a.get("reason", ""), "statistics": stats})
