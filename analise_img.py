@@ -3,6 +3,7 @@
 Só usa Pillow (leve, cabe na máquina de 256 MB do Fly).
 """
 import os
+import unicodedata
 from statistics import mean, median
 
 from PIL import Image, ImageDraw, ImageFont
@@ -34,8 +35,15 @@ W, H = 1080, 1500
 M = 56  # margem lateral
 
 
+def limpo(txt: str) -> str:
+    """Sem acentos nem símbolos especiais, para não sair estragado com qualquer letra."""
+    txt = str(txt).replace("–", "-").replace("—", "-").replace("·", "-")
+    txt = unicodedata.normalize("NFKD", txt)
+    return "".join(c for c in txt if not unicodedata.combining(c) and ord(c) < 128)
+
+
 def _texto(d, xy, txt, fonte, cor, ancora="la"):
-    d.text(xy, txt, font=fonte, fill=cor, anchor=ancora)
+    d.text(xy, limpo(txt), font=fonte, fill=cor, anchor=ancora)
 
 
 def _linha_tracejada(d, x0, x1, y, cor, larg=4, traco=18, espaco=12):
@@ -100,7 +108,7 @@ def _painel(img, d, topo, titulo, jogos, linha, under, altura=470):
 
     for i, (rot, sub, val) in enumerate(jogos):
         cx = g_esq + slot * (i + 0.5)
-        d.text((cx, y_de(val) - 10), str(val), font=f_val, fill=BRANCO, anchor="ms",
+        d.text((cx, y_de(val) - 10), limpo(val), font=f_val, fill=BRANCO, anchor="ms",
                stroke_width=6, stroke_fill=PAINEL)
     return topo + altura
 
@@ -114,7 +122,7 @@ def gerar(jogador: str, equipa: str, adversario: str, stat_nome: str, linha: flo
     # Cabeçalho
     _texto(d, (M, 54), jogador.upper(), _fonte("InterDisplay-Black.otf", 58), BRANCO)
     lado = "UNDER" if under else "OVER"
-    tag = f"{lado} {linha:g} {stat_nome.upper()}"
+    tag = limpo(f"{lado} {linha:g} {stat_nome.upper()}")
     f_tag = _fonte("Inter-Black.otf", 30)
     b = d.textbbox((0, 0), tag, font=f_tag)
     d.rounded_rectangle([M, 138, M + b[2] - b[0] + 40, 138 + 52], radius=12, fill=VERMELHO)
@@ -129,9 +137,9 @@ def gerar(jogador: str, equipa: str, adversario: str, stat_nome: str, linha: flo
     # Resumo em números
     vals = [v for _, _, v in ultimos] or [0]
     cartoes = [("MÉDIA", f"{mean(vals):.1f}"), ("MEDIANA", f"{median(vals):g}"),
-               ("MÍN–MÁX", f"{min(vals)}–{max(vals)}"),
-               ("MINUTOS", f"{minutos_recentes:.0f}" + (" ▲" if minutos_recentes > minutos_epoca + 1
-                                                          else " ▼" if minutos_recentes < minutos_epoca - 1 else ""))]
+               ("MIN-MAX", f"{min(vals)}-{max(vals)}"),
+               ("MINUTOS", f"{minutos_recentes:.0f}" + (f" ({minutos_recentes - minutos_epoca:+.0f})"
+                                                         if abs(minutos_recentes - minutos_epoca) >= 1 else ""))]
     larg = (W - 2 * M - 3 * 18) / 4
     f_k, f_v = _fonte("Inter-Bold.otf", 20), _fonte("InterDisplay-Black.otf", 40)
     for i, (k, v) in enumerate(cartoes):
@@ -146,7 +154,7 @@ def gerar(jogador: str, equipa: str, adversario: str, stat_nome: str, linha: flo
     # Rodapé
     d.line([(M, H - 92), (W - M, H - 92)], fill=GRELHA, width=2)
     f_p, f_b = _fonte("Inter-Medium.otf", 24), _fonte("Inter-Black.otf", 24)
-    a, b_ = "Powered by ", "André Cunha Analytics"
+    a, b_ = "Powered by ", limpo("André Cunha Analytics")
     wa = d.textlength(a, font=f_p)
     wb = d.textlength(b_, font=f_b)
     x = (W - wa - wb) / 2
