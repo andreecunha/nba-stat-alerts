@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
+from telegram.error import BadRequest
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -266,6 +267,23 @@ async def cmd_diag(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_html("\n".join(linhas))
 
 
+async def responder(q, texto: str | None = None, show_alert: bool = False):
+    """Responde ao clique num botão. Se o clique for antigo (ex.: bot esteve parado), o Telegram recusa —
+    ignoramos e continuamos, em vez de o bot rebentar."""
+    try:
+        await q.answer(texto, show_alert=show_alert)
+    except BadRequest:
+        pass
+
+
+async def erro_geral(update: object, ctx: ContextTypes.DEFAULT_TYPE):
+    """Regista erros sem encher os logs com tracebacks de coisas sem importância."""
+    e = ctx.error
+    if isinstance(e, BadRequest) and ("too old" in str(e) or "not modified" in str(e)):
+        return
+    log.error("Erro ao tratar uma mensagem: %r", e, exc_info=e)
+
+
 # ---------- menu principal (botões fixos em baixo) ----------
 BOTAO_JOGOS, BOTAO_LISTA, BOTAO_AJUDA = "🏀 Jogos de hoje", "📋 A minha lista", "❓ Ajuda"
 MENU = ReplyKeyboardMarkup([[BOTAO_JOGOS, BOTAO_LISTA], [BOTAO_AJUDA]], resize_keyboard=True, is_persistent=True)
@@ -308,7 +326,7 @@ async def cmd_pedidos(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def fechar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
+    await responder(q)
     ctx.application.bot_data.get("pendente", {}).pop(q.message.chat.id, None)
     try:
         await q.message.delete()
@@ -318,7 +336,7 @@ async def fechar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def menu_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
+    await responder(q)
     if q.data == "menu:jogos":
         try:
             await q.message.delete()
@@ -359,7 +377,7 @@ async def cmd_jogos(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def jogo_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
+    await responder(q)
     await mostrar_jogo(ctx, q.message.chat.id, int(q.data.split(":")[1]))
 
 
@@ -446,7 +464,7 @@ def texto_escolha(esc: dict, tri: str) -> str:
 
 async def equipa_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
+    await responder(q)
     chat_id = q.message.chat.id
     esc = ctx.application.bot_data.get("escolha", {}).get(chat_id)
     tri = q.data.split(":")[1]
@@ -467,15 +485,15 @@ async def jogador_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     esc = ctx.application.bot_data.get("escolha", {}).get(chat_id)
     _, tri, i = q.data.split(":")
     if not esc or tri not in esc["equipas"]:
-        await q.answer("Este menu já expirou.")
+        await responder(q, "Este menu já expirou.")
         return
     nome = esc["equipas"][tri][int(i)][0]
     if nome in esc["sel"]:
         esc["sel"].remove(nome)
-        await q.answer(f"Tiraste {nome}")
+        await responder(q, f"Tiraste {nome}")
     else:
         esc["sel"].append(nome)
-        await q.answer(f"Escolheste {nome}")
+        await responder(q, f"Escolheste {nome}")
     await q.edit_message_text(texto_escolha(esc, tri), parse_mode="HTML", reply_markup=teclado_jogadores(esc, tri))
 
 
@@ -484,9 +502,9 @@ async def jogadores_ok(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     chat_id = q.message.chat.id
     esc = ctx.application.bot_data.get("escolha", {}).get(chat_id)
     if not esc or not esc["sel"]:
-        await q.answer("Toca primeiro num jogador para o escolheres.", show_alert=True)
+        await responder(q, "Toca primeiro num jogador para o escolheres.", show_alert=True)
         return
-    await q.answer()
+    await responder(q)
     nomes = list(esc["sel"])
     esc["sel"] = []
     await q.edit_message_text("Escolhidos: " + ", ".join(f"<b>{html.escape(n)}</b>" for n in nomes), parse_mode="HTML")
@@ -567,7 +585,7 @@ async def adicionar_atual(ctx, chat_id: int, linha, lado: str):
 
 async def stat_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
+    await responder(q)
     chat_id = q.message.chat.id
     pend = pendente(ctx, chat_id)
     if not pend or not pend["fila"]:
@@ -581,7 +599,7 @@ async def stat_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def lado_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
+    await responder(q)
     chat_id = q.message.chat.id
     pend = pendente(ctx, chat_id)
     if not pend or not pend["fila"] or pend["stat"] is None:
@@ -604,7 +622,7 @@ async def lado_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cancelar_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
+    await responder(q)
     pend = ctx.application.bot_data.setdefault("pendente", {}).pop(q.message.chat.id, None)
     resto = len(pend["fila"]) if pend else 0
     extra = f" ({resto} jogador{'es' if resto != 1 else ''} por adicionar)" if resto else ""
@@ -752,7 +770,7 @@ async def cmd_lista(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def lista_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer("A atualizar…")
+    await responder(q, "A atualizar…")
     texto = await texto_lista(ctx, q.message.chat.id)
     try:
         await q.edit_message_text(texto or "A tua lista está vazia.", parse_mode="HTML",
@@ -778,7 +796,7 @@ async def remover_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     chat_id = q.message.chat.id
     acao = q.data.split(":")[1]
     if acao == "menu":
-        await q.answer()
+        await responder(q)
         teclado = teclado_remover(chat_id)
         if teclado:
             await ctx.bot.send_message(chat_id, "🗑️ Toca em quem queres deixar de seguir:", reply_markup=teclado)
@@ -788,7 +806,7 @@ async def remover_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             con.execute("DELETE FROM subs WHERE chat_id = ?", (chat_id,))
         else:
             con.execute("DELETE FROM subs WHERE id = ? AND chat_id = ?", (int(acao), chat_id))
-    await q.answer("Removido")
+    await responder(q, "Removido")
     teclado = teclado_remover(chat_id)
     if teclado:
         await q.edit_message_reply_markup(teclado)
@@ -969,6 +987,7 @@ def main():
     app.add_handler(CallbackQueryHandler(lista_callback, pattern=r"^lista:"))
     app.add_handler(CallbackQueryHandler(remover_callback, pattern=r"^rm:"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texto_livre))
+    app.add_error_handler(erro_geral)
     log.info("Bot a correr. Leitura a cada %ss.", INTERVALO)
     app.run_polling()
 
