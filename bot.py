@@ -39,6 +39,7 @@ def _ler_token() -> str:
     return token
 
 
+VERSAO = "2026-10-25 19:10 (análise sem acentos)"
 TOKEN = _ler_token()
 INTERVALO = int(os.getenv("INTERVALO", "20"))  # segundos entre leituras
 PASTA_BOT = os.path.dirname(os.path.abspath(__file__))
@@ -256,7 +257,11 @@ async def cmd_diag(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Testa cada fonte de dados e diz o que funciona."""
     dados: Dados = ctx.application.bot_data["dados"]
     dados.cache.clear()
-    linhas = ["<b>Diagnóstico</b>"]
+    import analise_img as _img
+    letras = "Inter ✅" if os.path.exists(os.path.join(_img.PASTA_FONTES, "Inter-Bold.otf")) else "❌ falta a pasta fontes"
+    sem_acentos = "✅" if hasattr(_img, "limpo") else "❌ analise_img.py antigo"
+    linhas = ["<b>Diagnóstico</b>", f"Versão: {VERSAO}", f"Letras do gráfico: {letras}",
+              f"Gráfico sem acentos: {sem_acentos}", ""]
     vivos = []
     try:
         jogos = await dados.jogos_hoje()
@@ -1148,7 +1153,7 @@ def main():
     app.add_handler(CallbackQueryHandler(analise_callback, pattern=r"^an:"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texto_livre))
     app.add_error_handler(erro_geral)
-    log.info("Bot a correr. Leitura a cada %ss.", INTERVALO)
+    log.info("Bot a correr (versão %s). Leitura a cada %ss.", VERSAO, INTERVALO)
     app.run_polling()
 
 

@@ -58,6 +58,8 @@ def _painel(img, d, topo, titulo, jogos, linha, under, altura=470):
     esq, dir_ = M, W - M
     d.rounded_rectangle([esq, topo, dir_, topo + altura], radius=28, fill=PAINEL)
     if not jogos:
+        if " vs " in titulo:
+            titulo = "Contra " + titulo.split(" vs ", 1)[1]
         _texto(d, (esq + 32, topo + 30), titulo, _fonte("Inter-Bold.otf", 34), BRANCO)
         _texto(d, (W / 2, topo + altura / 2 + 20), "Sem jogos recentes para mostrar",
                _fonte("Inter-Medium.otf", 28), CINZA, "mm")
