@@ -43,7 +43,7 @@ def _ler_token() -> str:
     return token
 
 
-VERSAO = "2026-10-25 21:10 (números na barra)"
+VERSAO = "2026-10-25 22:15 (deslizar apostas)"
 TOKEN = _ler_token()
 INTERVALO = int(os.getenv("INTERVALO", "10"))  # segundos entre leituras
 PASTA_BOT = os.path.dirname(os.path.abspath(__file__))
@@ -173,7 +173,8 @@ def db():
         id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, jogador TEXT,
         stat TEXT, linha REAL, perto INTEGER)""")
     for coluna in ("fim REAL",        # quando o jogo acabou (para remoção automática)
-                   "lado TEXT"):      # "over" ou "under"
+                   "lado TEXT",       # "over" ou "under"
+                   "mudo INTEGER"):   # 1 = silenciada (sem avisos, mas continua na lista)
         try:
             con.execute(f"ALTER TABLE subs ADD COLUMN {coluna}")
         except sqlite3.OperationalError:
@@ -197,6 +198,20 @@ def guardar_notif(alertas: list):
         con.execute("DELETE FROM notif WHERE ts < ?", (agora - NOTIF_DIAS * 86400,))
 
 
+def silenciar(chat_id: int, sub_id: int, mudo: bool):
+    with db() as con:
+        con.execute("UPDATE subs SET mudo = ? WHERE id = ? AND chat_id = ?", (1 if mudo else 0, sub_id, chat_id))
+
+
+def apagar_notif(chat_id: int, notif_id: int | None = None):
+    """Apaga uma notificação da app, ou todas se notif_id for None."""
+    with db() as con:
+        if notif_id is None:
+            con.execute("DELETE FROM notif WHERE chat_id = ?", (chat_id,))
+        else:
+            con.execute("DELETE FROM notif WHERE id = ? AND chat_id = ?", (notif_id, chat_id))
+
+
 def notificacoes(chat_id: int, limite: int = 80) -> list[dict]:
     with db() as con:
         linhas = con.execute("SELECT id, ts, jogador, pid, texto FROM notif WHERE chat_id = ? "
@@ -211,8 +226,8 @@ def fins(chat_id: int) -> dict[int, float]:
 
 def todas_subs() -> list[Sub]:
     with db() as con:
-        return [Sub(*r[:6], r[6] or "over")
-                for r in con.execute("SELECT id, chat_id, jogador, stat, linha, perto, lado FROM subs")]
+        return [Sub(*r[:6], r[6] or "over", bool(r[7]))
+                for r in con.execute("SELECT id, chat_id, jogador, stat, linha, perto, lado, mudo FROM subs")]
 
 
 def subs_de(chat_id: int) -> list[Sub]:
@@ -1316,6 +1331,7 @@ async def iniciar_web(app: Application):
         "criar_sub": criar_sub, "remover": remover_sub, "media_recente": media_recente,
         "linha_inicial": linha_inicial, "dados_analise": dados_analise,
         "valor_de": valor_de, "alvo": alvo, "resumo_dd": resumo_dd, "notificacoes": notificacoes,
+        "silenciar": silenciar, "apagar_notif": apagar_notif,
         "enviar_confirmacao": lambda chat_id, texto, sub: enviar_confirmacao(app, chat_id, texto, sub),
     }
     runner = _web.AppRunner(webapp.criar_app(app, api), access_log=None)

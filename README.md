@@ -52,6 +52,10 @@ jogos de hoje com logos, plantéis com fotos e lesões, procura de jogadores, se
 média dos últimos 5 jogos, análise com gráfico e a tua lista de apostas ao vivo (atualiza a cada 10 s, com barra
 de progresso até à linha, ✅/❌ e destaque quando o valor sobe). O 🔔 no canto superior direito mostra as
 notificações (cestos, linhas batidas, stats anuladas, faltas), as mesmas que chegam no chat.
+A lista tem duas abas, «Os meus jogos» e «Ao vivo», agrupadas por jogo; as apostas já resolvidas descem para o fim.
+Os jogos que estão a 15 minutos de começar têm uma luz vermelha a piscar.
+No 🔔 cada notificação apaga-se a deslizar para a esquerda (ou todas de uma vez), e cada aposta desliza para a
+esquerda para a silenciar (sem avisos, mas continua na lista) ou remover.
 
 A app é servida pelo próprio bot (`webapp.py` + `app/index.html`) e precisa de HTTPS — no Fly.io fica em
 `https://<nome-da-app>.fly.dev/app` e o bot configura o botão sozinho. Noutro alojamento, define `WEBAPP_URL`.

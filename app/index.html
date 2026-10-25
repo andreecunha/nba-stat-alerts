@@ -55,15 +55,23 @@ img { display: block; }
 /* ---------- notificações ---------- */
 .notifs-cab { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px 10px; }
 .notifs-cab b { font-family: var(--cond); font-weight: 800; font-size: 26px; }
-.notif { display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--risca); }
-.notif:last-child { border-bottom: 0; }
+.notif-caixa { position: relative; overflow: hidden; border-bottom: 1px solid var(--risca);
+               transition: height .22s ease-out, opacity .22s; }
+.notif-caixa:last-child { border-bottom: 0; }
+.notif-caixa .apagar-fundo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end;
+                             padding-right: 20px; background: var(--falha); color: #fff; font-weight: 700; font-size: 15px; gap: 6px; }
+.notif { position: relative; display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 12px 8px;
+         background: var(--noite); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.notif.solta { transition: transform .22s ease-out; }
+.notifs-cab button { color: var(--suave); font-size: 14px; font-weight: 600; padding: 6px 2px; }
+.notifs-dica { color: var(--suave); font-size: 13px; margin: -6px 2px 6px; }
 .notif .foto { width: 40px; height: 40px; }
 .notif .foto span { font-size: 15px; }
 .notif .txt { font-size: 15px; line-height: 1.35; white-space: pre-line; }
 .notif .txt b { font-weight: 700; }
 .notif .jogo-n { color: var(--suave); font-size: 13px; margin-top: 3px; white-space: pre-line; }
 .notif .hora { color: var(--suave); font-size: 12px; margin-top: 3px; }
-.notif.nova { background: linear-gradient(90deg, rgba(230, 30, 50, .10), transparent 70%); border-radius: 10px; }
+.notif.nova { background: linear-gradient(90deg, #2a1a33, var(--noite) 70%); }
 h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 18px 10px; }
 
 /* ---------- separadores em baixo ---------- */
@@ -94,6 +102,11 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 .vivo::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--nba);
                 margin-right: 6px; vertical-align: 1px; animation: pulsa 1.6s ease-in-out infinite; }
 @keyframes pulsa { 50% { opacity: .25; } }
+.acomecar { color: var(--texto); font-weight: 600; }
+.acomecar::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--nba);
+                    margin-right: 6px; vertical-align: 1px; box-shadow: 0 0 8px var(--nba); animation: pisca .8s steps(1, end) infinite; }
+@keyframes pisca { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .acomecar::before { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .vivo::before { animation: none; } }
 
 /* ---------- marcador do jogo aberto ---------- */
@@ -139,8 +152,22 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 .caixa::before { content: "🔎"; position: absolute; left: 14px; top: 13px; font-size: 16px; opacity: .8; }
 
 /* ---------- lista ---------- */
-.aposta { display: grid; grid-template-columns: 52px 1fr auto; gap: 6px 12px; align-items: center; margin: 0 14px 10px;
-          padding: 14px; background: var(--painel); border-radius: var(--raio); }
+.aposta-caixa { position: relative; margin: 0 14px 10px; border-radius: var(--raio); overflow: hidden; background: var(--painel-2); }
+.acoes-fundo { position: absolute; top: 0; right: 0; bottom: 0; width: 172px; display: grid; grid-template-columns: 1fr 1fr; }
+.acao { display: grid; place-content: center; justify-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #fff; }
+.acao svg { width: 22px; height: 22px; }
+.acao.som { background: #3b4a8a; }
+.acao.som.mudo { background: var(--bate); }
+.acao.tirar { background: var(--falha); }
+.aposta { position: relative; display: grid; grid-template-columns: 52px 1fr auto; gap: 6px 12px; align-items: center;
+          padding: 14px; background: var(--painel); border-radius: var(--raio); touch-action: pan-y;
+          transition: transform .22s ease-out; }
+.aposta.a-mexer { transition: none; user-select: none; -webkit-user-select: none; }
+.aposta.aberta { transform: translateX(-172px); }
+.mais-acoes { align-self: start; width: 32px; height: 32px; border-radius: 50%; color: var(--suave); font-size: 20px; line-height: 1; }
+.mudo-ic { display: inline-block; vertical-align: -2px; margin-left: 6px; color: var(--falha); }
+.mudo-ic svg { width: 16px; height: 16px; }
+@media (prefers-reduced-motion: reduce) { .aposta { transition: none; } }
 .aposta .titulo { font-weight: 700; font-size: 17px; }
 .etiqueta { display: inline-block; margin-top: 6px; font-family: var(--cond); font-weight: 700; font-size: 17px;
             padding: 2px 9px; border-radius: 7px; background: var(--nba); }
@@ -167,9 +194,15 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
          animation: salta 2.4s ease-out forwards; }
 @keyframes salta { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
 .aposta.mexeu { animation: brilha 1.6s ease-out; }
-@keyframes brilha { 0% { box-shadow: 0 0 0 2px var(--bate); } 100% { box-shadow: 0 0 0 2px transparent; } }
+@keyframes brilha { 0% { box-shadow: inset 0 0 0 2px var(--bate); } 100% { box-shadow: inset 0 0 0 2px transparent; } }
 @media (prefers-reduced-motion: reduce) { .salto, .aposta.mexeu { animation: none; } .barra-prog i { transition: none; } }
-.tirar { width: 34px; height: 34px; border-radius: 50%; background: var(--painel-2); color: var(--suave); font-size: 18px; }
+.grupo { display: flex; justify-content: space-between; margin: 16px 18px 8px; font-family: var(--cond); font-weight: 700;
+         font-size: 17px; color: var(--suave); letter-spacing: .02em; }
+.grupo span { font-family: var(--corpo); font-weight: 500; font-size: 14px; }
+.segmento.filtro { margin: 4px 14px 6px; }
+.segmento.filtro button { font-size: 17px; padding: 8px 6px; }
+.segmento.filtro em { font-style: normal; font-family: var(--corpo); font-size: 12px; font-weight: 700; background: var(--nba);
+                      color: #fff; border-radius: 9px; padding: 0 6px; line-height: 18px; }
 
 .vazio { margin: 40px 24px; text-align: center; color: var(--suave); line-height: 1.5; }
 .vazio button { margin-top: 14px; }
@@ -286,6 +319,12 @@ const S = { aba: "jogos", stats: [], jogo: null, equipa: 0, folha: null, lista: 
 const ecra = document.getElementById("ecra");
 const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const vibra = tipo => { try { tg && tg.HapticFeedback[tipo === "ok" ? "notificationOccurred" : "selectionChanged"](tipo === "ok" ? "success" : undefined); } catch (e) {} };
+const guardado = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+// Nome da estatística como aparece nas etiquetas: completo, ou abreviado quando é comprido.
+const NOMES = { pts: "Pontos", reb: "Ressaltos", ast: "Assistências", "3pt": "3PT", stl: "Roubos", blk: "Desarmes",
+                pra: "PRA", pr: "PR", pa: "PA", ra: "RA", dd: "Duplo-Duplo", td: "Triplo-Duplo" };
+const nomeStat = (id, nome = "") => NOMES[id] || (nome.charAt(0).toUpperCase() + nome.slice(1));
 const fmt = n => (Math.round(n * 10) / 10).toString();
 
 async function api(caminho, opcoes = {}) {
@@ -335,13 +374,16 @@ async function verJogos() {
       <button class="jogo" data-id="${esc(g.id)}">
         <div class="equipa">${imagem(g.fora.logo, "logo")}<span class="tri">${esc(g.fora.tri)}</span></div>
         <div class="meio">${g.estado === 1
-          ? `<div class="resultado" style="font-size:20px">${esc(hora(g.quando))}</div><div class="detalhe">${esc(dia(g.quando))}</div>`
+          ? `<div class="resultado" style="font-size:20px">${esc(hora(g.quando))}</div>${prestes(g.inicio)
+              ? `<div class="detalhe acomecar">A começar</div>` : `<div class="detalhe">${esc(dia(g.quando))}</div>`}`
           : `<div class="resultado">${g.fora.score}–${g.casa.score}</div><div class="detalhe ${g.estado === 2 ? "vivo" : ""}">${g.estado === 2 ? esc(g.relogio) : "Final"}</div>`}
         </div>
         <div class="equipa casa">${imagem(g.casa.logo, "logo")}<span class="tri">${esc(g.casa.tri)}</span></div>
       </button>`).join("")}</div>`;
   ecra.querySelectorAll(".jogo").forEach(b => b.onclick = () => { vibra(); abrirJogo(b.dataset.id); });
 }
+const PRESTES = 15 * 60 * 1000;   // "a começar" nos últimos 15 minutos antes do início
+const prestes = inicio => inicio && new Date(inicio) - Date.now() <= PRESTES;
 const hora = q => (q.match(/às (\d\d:\d\d)/) || [, ""])[1];
 const dia = q => q.includes("amanhã") ? "amanhã" : q.startsWith("daqui") ? q.split(" (")[0] : "";
 
@@ -440,32 +482,159 @@ async function verLista(silencioso = false) {
     if (antes != null && a.valor > antes) subiu[a.id] = a.valor - antes;
     S.valores[a.id] = a.valor;
   });
-  const algumVivo = S.lista.some(a => a.fase === "vivo");
+  // Duas abas: todas as apostas, ou só as dos jogos a decorrer. Sempre agrupadas por jogo, pela hora.
+  const aoVivo = S.lista.filter(a => a.fase === "vivo");
+  const mostrar = S.filtro === "vivo" ? aoVivo : S.lista;
+  const { abertas, resolvidas } = ordenar(mostrar);
+  let html = "", grupo = null;
+  abertas.forEach(a => {
+    const g = a.par || "";
+    if (g !== grupo) { grupo = g; html += `<div class="grupo">${cabecalho(a)}</div>`; }
+    html += cartao(a, subiu[a.id]);
+  });
+  if (resolvidas.length) html += `<div class="grupo">Já resolvidas</div>` + resolvidas.map(a => cartao(a, subiu[a.id])).join("");
+  if (!mostrar.length) html = `<div class="vazio">Nenhum dos teus jogos está a decorrer agora.</div>`;
   ecra.innerHTML = `<h2>A minha lista</h2>
-    ${algumVivo ? `<p class="aviso vivo">Ao vivo, atualiza sozinha</p>` : ""}` + S.lista.map(a => cartao(a, subiu[a.id])).join("");
-  ecra.querySelectorAll(".tirar").forEach(b => b.onclick = async () => {
+    <div class="segmento filtro" role="tablist" aria-label="Mostrar">
+      <button data-filtro="todos" aria-pressed="${S.filtro !== "vivo"}">Os meus jogos</button>
+      <button data-filtro="vivo" aria-pressed="${S.filtro === "vivo"}"><span class="${aoVivo.length ? "vivo" : ""}">Ao vivo</span>${aoVivo.length ? `<em>${aoVivo.length}</em>` : ""}</button>
+    </div>` + html;
+  ecra.querySelectorAll("[data-filtro]").forEach(b => b.onclick = () => {
+    vibra(); S.filtro = b.dataset.filtro; guardar("filtro", S.filtro); verLista(true); window.scrollTo(0, 0);
+  });
+  ecra.querySelectorAll(".aposta-caixa").forEach(arrastarCartao);
+  ecra.querySelectorAll(".mais-acoes").forEach(b => b.onclick = () => {   // alternativa ao deslizar
+    const caixa = b.closest(".aposta-caixa"); abrirCartao(caixa, S.aberta !== +caixa.dataset.id);
+  });
+  ecra.querySelectorAll(".acao.som").forEach(b => b.onclick = async () => {
     const a = S.lista.find(x => String(x.id) === b.dataset.id);
-    const desc = a.linha == null ? a.stat_nome : `${a.lado === "under" ? "under" : "over"} ${fmt(a.linha)} ${a.stat_nome}`;
+    const mudo = !a.mudo;
+    try {
+      await api(`/api/lista/${a.id}/mudo`, { method: "POST", body: JSON.stringify({ mudo }) });
+      a.mudo = mudo; vibra("ok"); S.aberta = null;
+      toast(mudo ? `Silenciado: sem avisos de ${a.jogador}` : `Voltas a receber avisos de ${a.jogador}`);
+      verLista(true);
+    } catch (e) { toast(e.message); }
+  });
+  ecra.querySelectorAll(".acao.tirar").forEach(b => b.onclick = async () => {
+    const a = S.lista.find(x => String(x.id) === b.dataset.id);
+    const desc = a.linha == null ? nomeStat(a.stat, a.stat_nome) : `${a.lado === "under" ? "Under" : "Over"} ${fmt(a.linha)} ${nomeStat(a.stat, a.stat_nome)}`;
     if (!await confirmar(`Deixar de seguir ${a.jogador} (${desc})?`)) return;
-    try { await api("/api/lista/" + b.dataset.id, { method: "DELETE" }); vibra("ok"); toast("Deixaste de seguir"); verLista(); }
+    try { await api("/api/lista/" + b.dataset.id, { method: "DELETE" }); vibra("ok"); toast("Deixaste de seguir"); S.aberta = null; verLista(); }
     catch (e) { toast(e.message); }
   });
   if (Object.keys(subiu).length) vibra("ok");
-  verLista.t = setTimeout(() => { if (S.aba === "lista" && !document.hidden) verLista(true); }, ATUALIZAR);
+  verLista.t = setTimeout(function repetir() {
+    if (S.arrastar) { verLista.t = setTimeout(repetir, 1500); return; }
+    if (S.aba === "lista" && !document.hidden) verLista(true);
+  }, ATUALIZAR);
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden && S.aba === "lista") verLista(true); });
 
+S.filtro = guardado("filtro") || "todos";
+
+// Já decidida: a linha já bateu (✅), o under já perdeu (❌) ou o jogo acabou.
+function resolvida(a) {
+  if (a.fase === "fim") return true;
+  if (a.valor == null) return false;
+  if (a.alvo_dd) return a.valor >= a.alvo_dd;
+  if (a.alvo != null) return a.valor >= a.alvo;
+  return false;
+}
+function ordenar(lista) {
+  const hora = a => a.inicio ? new Date(a.inicio).getTime() : Infinity;
+  const regra = (x, y) => hora(x) - hora(y) || (x.par || "").localeCompare(y.par || "")
+    || (x.team || "").localeCompare(y.team || "") || x.jogador.localeCompare(y.jogador, "pt");
+  const todas = [...lista].sort(regra);
+  return { abertas: todas.filter(a => !resolvida(a)), resolvidas: todas.filter(resolvida) };
+}
+function cabecalho(a) {
+  if (!a.par) return "Sem jogo marcado";
+  const [fora, casa] = a.par.split("@");
+  let quando = "";
+  if (a.fase === "vivo") quando = "Ao vivo";
+  else if (a.inicio) {
+    const d = new Date(a.inicio), hoje = new Date();
+    const h = d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+    const amanha = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
+    quando = d.toDateString() === hoje.toDateString() ? h
+           : d.toDateString() === amanha.toDateString() ? `amanhã ${h}`
+           : `${d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" })} ${h}`;
+  }
+  return `${esc(fora)} @ ${esc(casa)}${quando ? `<span>${esc(quando)}</span>` : ""}`;
+}
+
+const LIXO = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
+const COM_SOM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>`;
+const SEM_SOM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>`;
+
+// Cada aposta desliza para a esquerda e mostra dois botões: silenciar / ativar som e remover.
 function cartao(a, mais) {
-  return `<div class="aposta ${mais ? "mexeu" : ""}" data-id="${a.id}">
-    ${foto(a.foto, a.jogador)}
-    <div><div class="titulo">${esc(a.jogador)}</div>${etiqueta(a)}</div>
-    <button class="tirar" data-id="${a.id}" aria-label="Deixar de seguir ${esc(a.jogador)}">✕</button>
-    <div class="estado">${progresso(a, mais)}</div>
+  const aberta = S.aberta === a.id;
+  return `<div class="aposta-caixa" data-id="${a.id}">
+    <div class="acoes-fundo">
+      <button class="acao som ${a.mudo ? "mudo" : ""}" data-id="${a.id}" tabindex="${aberta ? 0 : -1}"
+              aria-label="${a.mudo ? "Voltar a receber" : "Silenciar"} avisos de ${esc(a.jogador)}">${a.mudo ? COM_SOM : SEM_SOM}<span>${a.mudo ? "Ativar som" : "Silenciar"}</span></button>
+      <button class="acao tirar" data-id="${a.id}" tabindex="${aberta ? 0 : -1}"
+              aria-label="Deixar de seguir ${esc(a.jogador)}">${LIXO}<span>Remover</span></button>
+    </div>
+    <div class="aposta ${mais ? "mexeu" : ""} ${aberta ? "aberta" : ""}" data-id="${a.id}">
+      ${foto(a.foto, a.jogador)}
+      <div><div class="titulo">${esc(a.jogador)}${a.mudo ? `<span class="mudo-ic" aria-label="silenciado">${SEM_SOM}</span>` : ""}</div>${etiqueta(a)}</div>
+      <button class="mais-acoes" data-id="${a.id}" aria-label="Opções de ${esc(a.jogador)}">⋯</button>
+      <div class="estado">${progresso(a, mais)}</div>
+    </div>
   </div>`;
+}
+
+const ABERTO = 172;   // largura dos dois botões
+function arrastarCartao(caixa) {
+  const el = caixa.querySelector(".aposta"), id = +caixa.dataset.id;
+  let x0 = null, y0 = 0, dx = 0, base = 0, horizontal = null;
+  const por = x => { el.style.transform = x ? `translateX(${x}px)` : ""; };
+  el.addEventListener("pointerdown", e => {
+    if (e.target.closest(".mais-acoes")) return;
+    x0 = e.clientX; y0 = e.clientY; dx = 0; horizontal = null;
+    base = S.aberta === id ? -ABERTO : 0; el.classList.add("a-mexer");
+  });
+  el.addEventListener("pointermove", e => {
+    if (x0 == null) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (horizontal == null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) {
+      horizontal = Math.abs(mx) > Math.abs(my);
+      if (horizontal) { S.arrastar = true; fecharOutros(id); try { el.setPointerCapture(e.pointerId); } catch (_) {} }
+    }
+    if (!horizontal) return;
+    dx = mx; por(Math.max(-ABERTO - 30, Math.min(0, base + dx)));
+  });
+  const largar = () => {
+    if (x0 == null) return;
+    x0 = null; S.arrastar = false; el.classList.remove("a-mexer");
+    if (!horizontal) {               // toque simples: se estiver aberta, fecha
+      if (S.aberta === id) abrirCartao(caixa, false);
+      return;
+    }
+    abrirCartao(caixa, base + dx < -ABERTO / 2);
+  };
+  el.addEventListener("pointerup", largar); el.addEventListener("pointercancel", largar);
+}
+function abrirCartao(caixa, abrir) {
+  const el = caixa.querySelector(".aposta"), id = +caixa.dataset.id;
+  if (abrir) { fecharOutros(id); vibra(); }
+  S.aberta = abrir ? id : (S.aberta === id ? null : S.aberta);
+  el.style.transform = ""; el.classList.toggle("aberta", abrir);
+  caixa.querySelectorAll(".acao").forEach(b => b.tabIndex = abrir ? 0 : -1);
+}
+function fecharOutros(id) {
+  document.querySelectorAll(".aposta-caixa").forEach(c => { if (+c.dataset.id !== id) abrirCartao(c, false); });
 }
 
 // Valor atual, ✅/❌ e, em baixo, o jogo e uma barra pequena até à linha.
 function progresso(a, mais) {
+  if ((a.fase === "pre" || a.valor == null) && prestes(a.inicio)) {
+    const jogo = (a.par || "").replace("@", " @ ");
+    return `<div class="mini acomecar">A começar${jogo ? `&ensp;·&ensp;${esc(jogo)}` : ""}</div>`;
+  }
   if (a.fase === "pre" || a.valor == null) {
     return esc((a.estado || "").replace(/[🟢🔴🟡🟣🔵⚪⚫🟠🟤]/gu, "").replace(/ {2,}/g, " ").trim());
   }
@@ -510,9 +679,9 @@ function confirmar(texto) {
   });
 }
 function etiqueta(a) {
-  const nome = a.stat_nome.charAt(0).toUpperCase() + a.stat_nome.slice(1);
+  const nome = nomeStat(a.stat, a.stat_nome);
   if (a.linha == null) return `<span class="etiqueta sem">${esc(nome)}</span>`;
-  return `<span class="etiqueta ${a.lado === "under" ? "under" : ""}">${a.lado === "under" ? "Under" : "Over"} ${fmt(a.linha)} ${esc(a.stat_nome)}</span>`;
+  return `<span class="etiqueta ${a.lado === "under" ? "under" : ""}">${a.lado === "under" ? "Under" : "Over"} ${fmt(a.linha)} ${esc(nome)}</span>`;
 }
 function contar() {
   const c = document.getElementById("conta");
@@ -520,8 +689,6 @@ function contar() {
 }
 
 /* ---------- notificações (o mesmo que chega no chat) ---------- */
-const guardado = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
-const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 S.notifs = []; S.visto = +(guardado("notif_visto") || 0);
 
 async function verNotifs() {
@@ -532,7 +699,7 @@ async function verNotifs() {
     S.notifs = nova;
     const ultimo = nova.length ? nova[0].id : 0;
     if (antes != null && ultimo > antes) { const s = document.getElementById("sino"); s.classList.remove("toca"); void s.offsetWidth; s.classList.add("toca"); }
-    if (S.folha && S.folha.notifs) { S.visto = ultimo; guardar("notif_visto", ultimo); desenharNotifs(); }
+    if (S.folha && S.folha.notifs) { S.visto = ultimo; guardar("notif_visto", ultimo); if (!S.arrastar && ultimo !== antes) desenharNotifs(); }
     marcarNaoLidas();
   } catch (e) {}
   verNotifs.t = setTimeout(() => { if (!document.hidden) verNotifs(); else verNotifs.t = null; }, ATUALIZAR);
@@ -559,13 +726,56 @@ const textoNotif = t => esc(t).replace(/&lt;(\/?)b&gt;/g, "<$1b>");
 function desenharNotifs() {
   const lidaAte = S.folha.lidaAte;
   document.getElementById("folha").innerHTML = `<div class="pega"></div>
-    <div class="notifs-cab"><b>Notificações</b></div>
+    <div class="notifs-cab"><b>Notificações</b>${S.notifs.length ? `<button id="limparNotifs">Apagar todas</button>` : ""}</div>
+    ${S.notifs.length ? `<p class="notifs-dica">Desliza para a esquerda para apagar.</p>` : ""}
     ${S.notifs.length ? S.notifs.map(n => {
       const [txt, ...resto] = n.texto.split("\n\n");
-      return `<div class="notif ${n.id > lidaAte ? "nova" : ""}">${foto(n.foto, n.jogador || "?")}
+      return `<div class="notif-caixa" data-id="${n.id}"><div class="apagar-fundo">Apagar 🗑️</div><div class="notif ${n.id > lidaAte ? "nova" : ""}">${n.jogador ? foto(n.foto, n.jogador) : `<div class="foto rosto" aria-hidden="true"><span>🏀</span></div>`}
         <div><div class="txt">${textoNotif(txt)}</div>${resto.length ? `<div class="jogo-n">${textoNotif(semCores(resto.join("\n")))}</div>` : ""}
-        <div class="hora">${quandoFoi(n.ts)}</div></div></div>`;
+        <div class="hora">${quandoFoi(n.ts)}</div></div></div></div>`;
     }).join("") : `<div class="vazio" style="margin:30px 10px">Ainda não há notificações.<br>Aparecem aqui quando um jogador que segues marca, leva falta ou tem uma stat anulada.</div>`}`;
+  document.querySelectorAll(".notif-caixa").forEach(arrastavel);
+  const limpar = document.getElementById("limparNotifs");
+  if (limpar) limpar.onclick = async () => {
+    if (!await confirmar("Apagar todas as notificações?")) return;
+    try { await api("/api/notificacoes", { method: "DELETE" }); S.notifs = []; vibra("ok"); desenharNotifs(); marcarNaoLidas(); }
+    catch (e) { toast(e.message); }
+  };
+}
+
+// Deslizar para a esquerda: passa de 1/3 da largura (ou um gesto rápido) e apaga.
+function arrastavel(caixa) {
+  const el = caixa.querySelector(".notif");
+  let x0 = null, y0 = 0, dx = 0, t0 = 0, horizontal = null;
+  el.addEventListener("pointerdown", e => { x0 = e.clientX; y0 = e.clientY; dx = 0; t0 = Date.now(); horizontal = null; el.classList.remove("solta"); });
+  el.addEventListener("pointermove", e => {
+    if (x0 == null) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (horizontal == null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) {
+      horizontal = Math.abs(mx) > Math.abs(my);
+      if (horizontal) { S.arrastar = true; try { el.setPointerCapture(e.pointerId); } catch (_) {} }
+    }
+    if (!horizontal) return;
+    dx = Math.min(0, mx); el.style.transform = `translateX(${dx}px)`;
+  });
+  const largar = () => {
+    if (x0 == null) return;
+    x0 = null; S.arrastar = false;
+    const rapido = dx < -40 && Date.now() - t0 < 250;
+    el.classList.add("solta");
+    if (horizontal && (dx < -el.offsetWidth / 3 || rapido)) apagarNotif(caixa, el);
+    else el.style.transform = "";
+  };
+  el.addEventListener("pointerup", largar); el.addEventListener("pointercancel", largar);
+}
+async function apagarNotif(caixa, el) {
+  const id = +caixa.dataset.id;
+  el.style.transform = "translateX(-100%)"; vibra();
+  caixa.style.height = caixa.offsetHeight + "px";
+  requestAnimationFrame(() => { caixa.style.height = "0px"; caixa.style.opacity = "0"; });
+  S.notifs = S.notifs.filter(n => n.id !== id);
+  try { await api("/api/notificacoes/" + id, { method: "DELETE" }); } catch (e) { toast(e.message); }
+  setTimeout(() => { caixa.remove(); if (!S.notifs.length && S.folha && S.folha.notifs) desenharNotifs(); }, 240);
 }
 
 document.getElementById("sino").onclick = () => {
@@ -622,7 +832,7 @@ function desenharFolha() {
       <div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:6px">${imagem(f.logo, "logo-p")}${esc(f.equipa || "")}</div></div></div>
 
     <div class="rotulo">Estatística</div>
-    <div class="fichas">${S.stats.map(s => `<button class="ficha" data-s="${s.id}" aria-pressed="${s.id === f.stat}">${esc(s.nome.charAt(0).toUpperCase() + s.nome.slice(1))}</button>`).join("")}</div>
+    <div class="fichas">${S.stats.map(s => `<button class="ficha" data-s="${s.id}" aria-pressed="${s.id === f.stat}">${esc(nomeStat(s.id, s.nome))}</button>`).join("")}</div>
 
     ${st.dd ? "" : `
     <div class="rotulo">Aposta</div>

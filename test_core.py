@@ -53,7 +53,8 @@ for i, b in enumerate(seq):
     todas.append(m)
 
 assert any("vários jogadores" in x for _, x in todas[0])
-assert sum("Começou" in x for _, x in todas[0]) == 2
+assert sum("Começou" in x for _, x in todas[0]) == 1          # um só aviso por jogo
+assert any("Começou" in x and "LeBron" in x and "Curry" in x for _, x in todas[0])
 assert any("+2 pontos" in x for _, x in todas[1])
 assert any("PERTO DA LINHA" in x and "LeBron" in x for _, x in todas[2])
 assert any("PERTO DA LINHA" in x and "Curry" in x for _, x in todas[2])
@@ -177,4 +178,12 @@ assert cu["statistics"]["threePointersMade"] == 4
 assert encontrar(b["game"]["awayTeam"]["players"], "bronny")[0]["status"] == "INACTIVE"
 print("ESPN:", marcador(b["game"]))
 print("Conversão ESPN OK ✅")
+# --- silenciada: continua a ser seguida, mas sem avisos ---
+tm = Tracker()
+sm = [Sub(70, 100, "lebron", "pts", 24.5, mudo=True), Sub(71, 100, "curry", "3pt", 4.5)]
+assert all("LeBron" not in x for _, x in tm.processar(seq[0], sm))
+for b in seq[1:]:
+    assert all("LeBron" not in x for _, x in tm.processar(b, sm))
+assert 70 in tm.terminados   # sai da lista no fim, como as outras
+print("Silenciar OK ✅")
 print("Todos os testes passaram ✅")

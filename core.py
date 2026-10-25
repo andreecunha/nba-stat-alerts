@@ -108,6 +108,7 @@ class Sub:
     linha: float | None = None
     perto: int | None = None
     lado: str | None = "over"   # "over" (mais de) ou "under" (menos de)
+    mudo: bool = False          # silenciada: continua na lista, mas sem avisos
 
     @property
     def under(self) -> bool:
@@ -315,6 +316,7 @@ class Tracker:
         jogadores = game["homeTeam"].get("players", []) + game["awayTeam"].get("players", [])
         final = game.get("gameStatus") == 3
         msgs = []
+        comecos = {}   # chat_id -> {jogador: [id, [apostas]]}: um só "Começou o jogo" por jogo
         for s in subs:
             n0, p = len(msgs), None
             try:
@@ -345,10 +347,16 @@ class Tracker:
                         fl.add("inativo")
                         motivo = p.get("notPlayingDescription") or p.get("notPlayingReason") or ""
                         motivo = motivo.replace("INACTIVE_", "").replace("_", " ").strip().lower()
-                        msgs.append((s.chat_id, f"🔴 <b>{nome}</b> não está a jogar este jogo{f' ({html.escape(motivo)})' if motivo else ''}.\n\n{marcador(game)}"))
+                        chave_i = ("inativo", s.chat_id, nome, gid)   # um só aviso por jogador, mesmo com várias apostas
+                        if chave_i not in self.avisados:
+                            self.avisados.add(chave_i)
+                            msgs.append((s.chat_id, f"🔴 <b>{nome}</b> não está a jogar este jogo{f' ({html.escape(motivo)})' if motivo else ''}.\n\n{marcador(game)}"))
                     elif game.get("gameStatus") == 2 and (game.get("period") or 0) <= 1 and \
                             int(game["homeTeam"].get("score", 0) or 0) + int(game["awayTeam"].get("score", 0) or 0) < 12:
-                        msgs.append((s.chat_id, f"▶️ Começou o jogo de <b>{nome}</b> ({info['nome']}{f', {descr_linha(s)}' if s.linha is not None else ''})\n\n{marcador(game)}"))
+                        # Junta-se num só aviso por jogo (ver o fim da função).
+                        desc = info["nome"] + (f", {descr_linha(s)}" if s.linha is not None else "")
+                        if not s.mudo:
+                            comecos.setdefault(s.chat_id, {}).setdefault(nome, [p.get("id"), []])[1].append(desc)
                     self._flags_dd(s, st, fl)
                     if s.linha is not None:
                         falta = alvo(s.linha) - valor
@@ -430,8 +438,19 @@ class Tracker:
                     else:
                         msgs.append((s.chat_id, f"🏁 <b>{nome}</b> acabou com <b>{valor}</b> {info['nome']}\n\n{marcador(game)}"))
             finally:
+                if s.mudo:   # silenciada: o estado continua a ser seguido, mas os avisos não saem
+                    del msgs[n0:]
                 for k in range(n0, len(msgs)):   # cada alerta leva o jogador (para as notificações da app)
                     msgs[k] = Alerta(msgs[k], s.jogador if p is None else nome_completo(p), (p or {}).get("id"))
+        for chat_id, jogadores in comecos.items():
+            if len(jogadores) == 1:
+                (nome, (pid, apostas)), = jogadores.items()
+                texto = f"▶️ Começou o jogo de <b>{nome}</b> ({' · '.join(apostas)})"
+                msgs.append(Alerta((chat_id, f"{texto}\n\n{marcador(game)}"), html.unescape(nome), pid))
+            else:
+                linhas = [f"▶️ <b>Começou o jogo</b> — segues {len(jogadores)} jogadores:"]
+                linhas += [f"• <b>{nome}</b>: {' · '.join(apostas)}" for nome, (_, apostas) in jogadores.items()]
+                msgs.append(Alerta((chat_id, "\n".join(linhas) + f"\n\n{marcador(game)}"), "", None))
         return msgs
 
 

@@ -15,6 +15,8 @@ from urllib.parse import parse_qsl
 
 from aiohttp import web
 
+from core import proximo_jogo
+
 PASTA_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app")
 FOTO = "https://a.espncdn.com/i/headshots/nba/players/full/{}.png"
 
@@ -100,6 +102,7 @@ def criar_app(tg_app, api: dict) -> web.Application:
                 "id": g["gameId"], "estado": g["gameStatus"],
                 "fora": equipa(g["awayTeam"], lg), "casa": equipa(g["homeTeam"], lg),
                 "relogio": api["relogio"](g) if g["gameStatus"] != 1 else "",
+                "inicio": inicio or "",
                 "quando": api["quando"](api["data"](inicio), agora) if inicio and g["gameStatus"] == 1 else "",
             })
         return web.json_response(out)
@@ -170,7 +173,7 @@ def criar_app(tg_app, api: dict) -> web.Application:
             for nome in nomes:
                 r = api["encontrar"](todos, nome)
                 if len(r) == 1 and (nome not in achados or game.get("gameStatus") == 2):
-                    achados[nome] = (game, r[0])
+                    achados[nome] = (game, r[0], g.get("gameTimeUTC") or "")
         return achados
 
     async def lista(request):
@@ -184,15 +187,24 @@ def criar_app(tg_app, api: dict) -> web.Application:
             todos = []
         lg = await logos()
         vivos = await ao_vivo({s.jogador for s in subs})
+        try:   # para a hora de início dos jogos por começar
+            calendario = await dados().calendario()
+            estados = {g["gameId"]: g["gameStatus"] for g in await dados().jogos_hoje()}
+        except Exception:
+            calendario, estados = [], {}
+        agora = api["agora"]()
         out = []
         for s in subs:
             achados = api["encontrar"](todos, s.jogador) if todos else []
             p = achados[0] if len(achados) == 1 else {}
             item = {"id": s.id, "jogador": s.jogador, "stat": s.stat, "stat_nome": STATS[s.stat]["nome"],
                     "linha": s.linha, "lado": s.lado, "foto": FOTO.format(p["id"]) if p.get("id") else "",
-                    "team": p.get("team", ""), "logo": lg.get(p.get("team", ""), ""), "fase": "pre", "estado": ""}
+                    "team": p.get("team", ""), "logo": lg.get(p.get("team", ""), ""), "fase": "pre", "estado": "",
+                    "mudo": s.mudo}
             if s.jogador in vivos:
-                game, jp = vivos[s.jogador]
+                game, jp, inicio = vivos[s.jogador]
+                item["inicio"] = inicio
+                item["par"] = f'{game["awayTeam"]["teamTricode"]}@{game["homeTeam"]["teamTricode"]}'
                 st = jp.get("statistics", {})
                 item.update({
                     "fase": "inativo" if jp.get("status") == "INACTIVE" else ("fim" if game.get("gameStatus") == 3 else "vivo"),
@@ -208,6 +220,11 @@ def criar_app(tg_app, api: dict) -> web.Application:
                     item["estado"] = _sem_html(await api["estado"](dados(), s))
                 except Exception:
                     pass
+                if p.get("team") and calendario:
+                    j = proximo_jogo(calendario, p["team"], agora, estados)
+                    if j:
+                        item["inicio"] = j["inicio"].isoformat()
+                        item["par"] = f'{j["fora"]}@{j["casa"]}'
             if s.id in acabados and item["fase"] != "fim":
                 item["fase"] = "fim"
             out.append(item)
@@ -242,6 +259,19 @@ def criar_app(tg_app, api: dict) -> web.Application:
         chat_id = request["chat_id"]
         sid = int(request.match_info["sid"])
         api["remover"](chat_id, sid)
+        return web.json_response({"ok": True})
+
+    async def silenciar(request):
+        try:
+            corpo = await request.json()
+        except Exception:
+            corpo = {}
+        api["silenciar"](request["chat_id"], int(request.match_info["sid"]), bool(corpo.get("mudo")))
+        return web.json_response({"ok": True})
+
+    async def apagar_notif(request):
+        nid = request.match_info.get("nid")
+        api["apagar_notif"](request["chat_id"], int(nid) if nid else None)
         return web.json_response({"ok": True})
 
     async def notificacoes(request):
@@ -287,6 +317,7 @@ def criar_app(tg_app, api: dict) -> web.Application:
         web.get("/api/config", config), web.get("/api/jogos", jogos), web.get("/api/jogo/{gid}", jogo),
         web.get("/api/procurar", procurar), web.get("/api/lista", lista), web.post("/api/seguir", seguir),
         web.delete("/api/lista/{sid}", remover), web.get("/api/media", media), web.get("/api/analise", analise),
-        web.get("/api/notificacoes", notificacoes),
+        web.get("/api/notificacoes", notificacoes), web.delete("/api/notificacoes", apagar_notif),
+        web.delete("/api/notificacoes/{nid}", apagar_notif), web.post("/api/lista/{sid}/mudo", silenciar),
     ])
     return app
