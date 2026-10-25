@@ -43,7 +43,7 @@ def _ler_token() -> str:
     return token
 
 
-VERSAO = "2026-10-25 22:15 (deslizar apostas)"
+VERSAO = "2026-10-25 22:55 (notificações curtas)"
 TOKEN = _ler_token()
 INTERVALO = int(os.getenv("INTERVALO", "10"))  # segundos entre leituras
 PASTA_BOT = os.path.dirname(os.path.abspath(__file__))
@@ -181,6 +181,10 @@ def db():
             pass  # a coluna já existe
     con.execute("""CREATE TABLE IF NOT EXISTS notif (
         id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, ts REAL, jogador TEXT, pid TEXT, texto TEXT)""")
+    try:
+        con.execute("ALTER TABLE notif ADD COLUMN curto TEXT")   # versão curta para o sino da app
+    except sqlite3.OperationalError:
+        pass
     return con
 
 
@@ -193,8 +197,9 @@ def guardar_notif(alertas: list):
         return
     agora = time.time()
     with db() as con:
-        con.executemany("INSERT INTO notif (chat_id, ts, jogador, pid, texto) VALUES (?, ?, ?, ?, ?)",
-                        [(a[0], agora, getattr(a, "jogador", ""), getattr(a, "pid", None), a[1]) for a in alertas])
+        con.executemany("INSERT INTO notif (chat_id, ts, jogador, pid, texto, curto) VALUES (?, ?, ?, ?, ?, ?)",
+                        [(a[0], agora, getattr(a, "jogador", ""), getattr(a, "pid", None), a[1],
+                          getattr(a, "curto", None)) for a in alertas])
         con.execute("DELETE FROM notif WHERE ts < ?", (agora - NOTIF_DIAS * 86400,))
 
 
@@ -214,9 +219,10 @@ def apagar_notif(chat_id: int, notif_id: int | None = None):
 
 def notificacoes(chat_id: int, limite: int = 80) -> list[dict]:
     with db() as con:
-        linhas = con.execute("SELECT id, ts, jogador, pid, texto FROM notif WHERE chat_id = ? "
+        linhas = con.execute("SELECT id, ts, jogador, pid, texto, curto FROM notif WHERE chat_id = ? "
                              "ORDER BY id DESC LIMIT ?", (chat_id, limite)).fetchall()
-    return [{"id": i, "ts": ts, "jogador": j, "pid": pid, "texto": t} for i, ts, j, pid, t in linhas]
+    return [{"id": i, "ts": ts, "jogador": j, "pid": pid, "texto": c or t.split("\n\n")[0]}
+            for i, ts, j, pid, t, c in linhas]
 
 
 def fins(chat_id: int) -> dict[int, float]:
@@ -329,6 +335,9 @@ async def cmd_diag(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             game = (await dados.boxscore(vivos[0]["gameId"]))["game"]
             n = len(game["homeTeam"].get("players", [])) + len(game["awayTeam"].get("players", []))
             linhas.append(f"✅ ESPN ficha do jogo {vivos[0]['awayTeam']['teamTricode']}@{vivos[0]['homeTeam']['teamTricode']}: {n} jogadores")
+            campo = [p for t in ("homeTeam", "awayTeam") for p in game[t].get("players", []) if p.get("emCampo")]
+            linhas.append(f"{'✅' if len(campo) == 10 else '⚠️'} Em campo agora: {len(campo)} jogadores"
+                          + (f" ({', '.join(p['familyName'] for p in campo)})" if campo else " (sem dados de substituições)"))
         except Exception as e:
             linhas.append(f"❌ ESPN ficha do jogo: {html.escape(repr(e))[:200]}")
     try:
@@ -1285,9 +1294,11 @@ async def ciclo(app: Application):
                         guardar_notif(alertas)
                     except Exception as e:
                         log.warning("notificações da app: %s", e)
-                    for chat_id, texto in alertas:
+                    for alerta in alertas:
+                        chat_id, texto = alerta
                         try:
-                            await app.bot.send_message(chat_id, texto, parse_mode="HTML")
+                            await app.bot.send_message(chat_id, texto, parse_mode="HTML",
+                                                       disable_notification=getattr(alerta, "silencioso", False))
                         except Exception as e:
                             log.warning("envio para %s falhou: %s", chat_id, e)
                     if box["game"]["gameStatus"] == 3:

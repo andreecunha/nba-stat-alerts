@@ -186,4 +186,50 @@ for b in seq[1:]:
     assert all("LeBron" not in x for _, x in tm.processar(b, sm))
 assert 70 in tm.terminados   # sai da lista no fim, como as outras
 print("Silenciar OK ✅")
+
+# --- em campo / banco a partir das substituições ---
+from core import em_campo_espn
+def atl(i, nome, titular, active=None):
+    d = {"athlete": {"id": str(i), "displayName": nome}, "starter": titular, "stats": []}
+    if active is not None: d["active"] = active
+    return d
+eqA = [atl(i, f"Alfa {i}", i <= 5) for i in range(1, 9)]
+eqB = [atl(i, f"Beta {i}", i <= 25) for i in range(21, 29)]
+sm = {"boxscore": {"players": [{"team": {"abbreviation": "AAA"}, "statistics": [{"athletes": eqA}]},
+                               {"team": {"abbreviation": "BBB"}, "statistics": [{"athletes": eqB}]}]},
+      "plays": [{"type": {"text": "Substitution"}, "text": "Alfa 6 enters the game for Alfa 2"},
+                {"type": {"text": "Jump Shot"}, "text": "Alfa 6 makes 2-foot shot"},
+                {"type": {"text": "Substitution"}, "text": "Beta 26 enters the game for Beta 21",
+                 "participants": [{"athlete": {"id": "26"}}, {"athlete": {"id": "21"}}]},
+                {"type": {"text": "Substitution"}, "text": "Alfa 2 enters the game for Alfa 6"},
+                {"type": {"text": "Substitution"}, "text": "Alfa 7 enters the game for Alfa 1"}]}
+c = em_campo_espn(sm)
+assert [i for i in c if c[i]] == ["2", "3", "4", "5", "7", "22", "23", "24", "25", "26"], c
+assert c["1"] is False and c["6"] is False and c["21"] is False
+# com o campo "active" da ESPN (5 por equipa) usa esse
+ativo = {"boxscore": {"players": [
+    {"team": {"abbreviation": "AAA"}, "statistics": [{"athletes": [atl(i, f"A{i}", i <= 5, i in (1, 2, 3, 4, 8)) for i in range(1, 9)]}]},
+    {"team": {"abbreviation": "BBB"}, "statistics": [{"athletes": [atl(i, f"B{i}", i <= 25, i <= 25) for i in range(21, 29)]}]}]}}
+assert em_campo_espn(ativo)["8"] is True and em_campo_espn(ativo)["5"] is False
+# contas que não batem (sem titulares): não inventa
+assert em_campo_espn({"boxscore": {"players": [{"team": {"abbreviation": "AAA"}, "statistics": [{"athletes": [atl(1, "X", False)]}]}]}}) == {}
+print("Em campo OK ✅")
+
+# --- avisos de entrar / sair de campo ---
+tc = Tracker()
+sc = [Sub(80, 100, "lebron", "pts", 24.5), Sub(81, 100, "lebron", "reb")]   # duas apostas no mesmo jogador
+def com_campo(b, v):
+    for t_ in ("homeTeam", "awayTeam"):
+        for pl in b["game"][t_]["players"]:
+            pl["emCampo"] = v
+    return b
+import copy
+tc.processar(com_campo(copy.deepcopy(seq[1]), True), sc)
+m = tc.processar(com_campo(copy.deepcopy(seq[1]), True), sc); assert not any("campo" in x or "banco" in x for _, x in m)
+m = tc.processar(com_campo(copy.deepcopy(seq[1]), False), sc)
+banco = [a for a in m if "foi para o banco" in a[1]]
+assert len(banco) == 1 and banco[0].silencioso and "LeBron" in banco[0][1], m
+m = tc.processar(com_campo(copy.deepcopy(seq[1]), True), sc)
+assert sum("entrou em campo" in x for _, x in m) == 1
+print("Entrar / sair OK ✅")
 print("Todos os testes passaram ✅")

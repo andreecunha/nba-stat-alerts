@@ -144,6 +144,29 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 .mais { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--painel);
         font-size: 22px; line-height: 1; color: var(--suave); }
 
+/* ---------- ficha do jogo: tabela ---------- */
+.voltar { margin: 2px 14px 8px; color: var(--suave); font-weight: 600; font-size: 15px; padding: 4px 2px; }
+.tabela-caixa { margin: 0 14px; overflow-x: auto; background: var(--painel); border-radius: var(--raio); }
+.tabela { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tabela th, .tabela td { padding: 9px 4px; text-align: center; font-size: 14px; border-bottom: 1px solid var(--risca); white-space: nowrap; }
+.tabela td:last-child, .tabela thead th:last-child { padding-right: 10px; }
+.tabela thead th { color: var(--suave); font-size: 12px; font-weight: 600; letter-spacing: .03em; padding-top: 11px; }
+.tabela thead th:first-child, .tabela tbody th { text-align: left; padding-left: 10px; position: sticky; left: 0; background: var(--painel); z-index: 1; }
+.tabela tbody tr:last-child th, .tabela tbody tr:last-child td { border-bottom: 0; }
+.tabela td { color: var(--suave); }
+.tabela td.forte { color: var(--texto); font-weight: 700; }
+.tabela td.perigo { color: var(--falha); font-weight: 700; }
+.tabela tr { cursor: pointer; }
+.tabela tr.sigo th { box-shadow: inset 3px 0 0 var(--linha); }
+.tabela tr.sigo th b { color: var(--linha); }
+.quem-t { display: flex; align-items: center; gap: 8px; }
+.quem-t b { font-weight: 600; font-size: 14px; }
+.foto.mini-f { width: 28px; height: 28px; flex: none; }
+.foto.mini-f span { font-size: 11px; }
+.em { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--bate); margin-left: 6px; vertical-align: 2px; }
+.em-leg { white-space: nowrap; margin-left: 6px; }
+.em-leg .em { margin: 0 3px 0 0; }
+
 /* ---------- procurar ---------- */
 .caixa { margin: 4px 14px 6px; position: relative; }
 .caixa input { width: 100%; font: inherit; font-size: 17px; color: var(--texto); background: var(--painel);
@@ -152,8 +175,9 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 .caixa::before { content: "🔎"; position: absolute; left: 14px; top: 13px; font-size: 16px; opacity: .8; }
 
 /* ---------- lista ---------- */
-.aposta-caixa { position: relative; margin: 0 14px 10px; border-radius: var(--raio); overflow: hidden; background: var(--painel-2); }
-.acoes-fundo { position: absolute; top: 0; right: 0; bottom: 0; width: 172px; display: grid; grid-template-columns: 1fr 1fr; }
+.aposta-caixa { position: relative; margin: 0 14px 10px; border-radius: var(--raio); overflow: hidden; }
+.acoes-fundo { position: absolute; top: 0; right: 0; bottom: 0; width: 172px; display: grid; grid-template-columns: 1fr 1fr; visibility: hidden; }
+.aposta-caixa.mexe .acoes-fundo { visibility: visible; }
 .acao { display: grid; place-content: center; justify-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #fff; }
 .acao svg { width: 22px; height: 22px; }
 .acao.som { background: #3b4a8a; }
@@ -165,6 +189,11 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 .aposta.a-mexer { transition: none; user-select: none; -webkit-user-select: none; }
 .aposta.aberta { transform: translateX(-172px); }
 .mais-acoes { align-self: start; width: 32px; height: 32px; border-radius: 50%; color: var(--suave); font-size: 20px; line-height: 1; }
+.campo { display: inline-flex; align-items: center; gap: 5px; margin: 6px 0 0 8px; vertical-align: 1px;
+         font-size: 13px; font-weight: 600; color: var(--suave); }
+.campo::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #56608a; }
+.campo.sim { color: var(--bate); }
+.campo.sim::before { background: var(--bate); box-shadow: 0 0 6px var(--bate); }
 .mudo-ic { display: inline-block; vertical-align: -2px; margin-left: 6px; color: var(--falha); }
 .mudo-ic svg { width: 16px; height: 16px; }
 @media (prefers-reduced-motion: reduce) { .aposta { transition: none; } }
@@ -199,6 +228,9 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 .grupo { display: flex; justify-content: space-between; margin: 16px 18px 8px; font-family: var(--cond); font-weight: 700;
          font-size: 17px; color: var(--suave); letter-spacing: .02em; }
 .grupo span { font-family: var(--corpo); font-weight: 500; font-size: 14px; }
+button.grupo { width: calc(100% - 36px); text-align: left; align-items: baseline; }
+button.grupo span::after { content: " ›"; font-size: 17px; }
+.mini.ir-jogo { cursor: pointer; }
 .segmento.filtro { margin: 4px 14px 6px; }
 .segmento.filtro button { font-size: 17px; padding: 8px 6px; }
 .segmento.filtro em { font-style: normal; font-family: var(--corpo); font-size: 12px; font-weight: 700; background: var(--nba);
@@ -351,7 +383,7 @@ const foto = (src, nome, classe = "foto") => `<div class="${classe} rosto" aria-
 
 /* ---------- navegação ---------- */
 function mudarAba(aba) {
-  clearTimeout(verLista.t);
+  clearTimeout(verLista.t); clearTimeout(desenharJogo.t);
   S.aba = aba; S.jogo = null;
   document.querySelectorAll(".aba").forEach(b => b.setAttribute("aria-selected", b.dataset.aba === aba));
   if (tg) tg.BackButton.hide();
@@ -359,7 +391,8 @@ function mudarAba(aba) {
   window.scrollTo(0, 0);
 }
 document.querySelectorAll(".aba").forEach(b => b.onclick = () => { vibra(); mudarAba(b.dataset.aba); });
-if (tg) tg.BackButton.onClick(() => { if (S.folha) fecharFolha(); else if (S.jogo) mudarAba("jogos"); });
+const voltarDoJogo = () => mudarAba(S.voltar || "jogos");
+if (tg) tg.BackButton.onClick(() => { if (S.folha) fecharFolha(); else if (S.jogo) voltarDoJogo(); });
 
 /* ---------- jogos ---------- */
 async function verJogos() {
@@ -387,17 +420,39 @@ const prestes = inicio => inicio && new Date(inicio) - Date.now() <= PRESTES;
 const hora = q => (q.match(/às (\d\d:\d\d)/) || [, ""])[1];
 const dia = q => q.includes("amanhã") ? "amanhã" : q.startsWith("daqui") ? q.split(" (")[0] : "";
 
-async function abrirJogo(id) {
+async function abrirJogo(id, voltar = "jogos") {
+  clearTimeout(verLista.t); clearTimeout(desenharJogo.t);
+  S.voltar = voltar; S.aba = "jogo"; S.jogoId = id;
   aCarregar(); window.scrollTo(0, 0);
   if (tg) tg.BackButton.show();
-  try { S.jogo = await api("/api/jogo/" + encodeURIComponent(id)); } catch (e) { return erro(e.message, () => abrirJogo(id)); }
-  S.equipa = 0; desenharJogo();
+  try { S.jogo = await api("/api/jogo/" + encodeURIComponent(id)); } catch (e) { return erro(e.message, () => abrirJogo(id, voltar)); }
+  S.equipa = 0;
+  if (voltar === "lista") {   // abre na equipa de quem segues
+    const sigo = new Set(S.lista.map(a => norm(a.jogador)));
+    const conta = S.jogo.equipas.map(t => t.jogadores.filter(p => sigo.has(norm(p.nome))).length);
+    if (conta[1] > conta[0]) S.equipa = 1;
+  }
+  desenharJogo();
+}
+// Jogo a decorrer: a ficha atualiza-se sozinha de 10 em 10 segundos.
+async function atualizarJogo() {
+  const id = S.jogoId;
+  if (S.aba !== "jogo" || !S.jogo || document.hidden || S.folha) return agendarJogo();
+  try { const g = await api("/api/jogo/" + encodeURIComponent(id)); if (S.aba === "jogo" && S.jogoId === id) { S.jogo = g; desenharJogo(true); } }
+  catch (e) { agendarJogo(); }
+}
+function agendarJogo() {
+  clearTimeout(desenharJogo.t);
+  if (S.aba === "jogo" && S.jogo && S.jogo.estado === 2) desenharJogo.t = setTimeout(atualizarJogo, ATUALIZAR);
 }
 
-function desenharJogo() {
+function desenharJogo(silencioso = false) {
   const g = S.jogo, [f, c] = g.equipas, porComecar = g.estado === 1;
   const e = g.equipas[S.equipa];
+  const sigo = new Set(S.lista.map(a => norm(a.jogador)));
+  const y = window.scrollY;
   ecra.innerHTML = `
+    ${S.voltar === "lista" ? `<button class="voltar" id="voltar">‹ A minha lista</button>` : ""}
     <div class="marcador">
       <div class="lado">${imagem(f.logo, "logo")}<span class="tri">${esc(f.tri)}</span></div>
       <div class="centro">${porComecar ? `<div class="resultado" style="font-size:30px">@</div><div class="detalhe">Ainda não começou</div>`
@@ -405,18 +460,43 @@ function desenharJogo() {
       <div class="lado">${imagem(c.logo, "logo")}<span class="tri">${esc(c.tri)}</span></div>
     </div>
     <div class="segmento">${g.equipas.map((t, i) => `<button aria-pressed="${i === S.equipa}" data-i="${i}">${imagem(t.logo, "")}${esc(t.tri)}</button>`).join("")}</div>
-    ${porComecar ? '<p class="aviso">Plantel. Toca num jogador para o seguir.</p>' : '<p class="aviso">Toca num jogador para o seguir.</p>'}
+    ${porComecar ? `<p class="aviso">Plantel. Toca num jogador para o seguir.</p>
     <div class="jogadores">${e.jogadores.map((p, i) => `
       <button class="jogador ${p.inativo ? "inativo" : ""}" data-i="${i}">
         ${foto(p.foto, p.nome)}
         <div><div class="nome">${esc(p.nome)}</div><div class="sub">${linhaJogador(p)}</div></div>
         <span class="mais" aria-hidden="true">+</span>
-      </button>`).join("") || '<div class="vazio">Ainda não há plantel disponível.</div>'}</div>`;
+      </button>`).join("") || '<div class="vazio">Ainda não há plantel disponível.</div>'}</div>`
+    : tabelaJogo(e, sigo)}`;
   ecra.querySelectorAll(".segmento button").forEach(b => b.onclick = () => { vibra(); S.equipa = +b.dataset.i; desenharJogo(); });
-  ecra.querySelectorAll(".jogador").forEach(b => b.onclick = () => {
+  ecra.querySelectorAll("[data-i].jogador, tr[data-i]").forEach(b => b.onclick = () => {
     const p = e.jogadores[+b.dataset.i]; abrirFolha({ nome: p.nome, foto: p.foto, equipa: e.tri, logo: e.logo });
   });
+  const v = document.getElementById("voltar"); if (v) v.onclick = voltarDoJogo;
+  if (silencioso) window.scrollTo(0, y);
+  agendarJogo();
 }
+
+// Estatísticas de todos os jogadores da equipa (os que segues ficam marcados).
+function tabelaJogo(e, sigo) {
+  const jogaram = e.jogadores.filter(p => !p.inativo), fora = e.jogadores.filter(p => p.inativo);
+  const col = [["min", "MIN"], ["pts", "PTS"], ["reb", "RES"], ["ast", "AST"], ["3pt", "3PT"], ["stl", "ROU"], ["blk", "DES"], ["pf", "F"]];
+  const linha = (p) => {
+    const i = e.jogadores.indexOf(p), s = p.stats || {};
+    return `<tr data-i="${i}" class="${sigo.has(norm(p.nome)) ? "sigo" : ""}">
+      <th scope="row"><span class="quem-t">${foto(p.foto, p.nome, "foto mini-f")}<span><b>${esc(abreviar(p.nome))}</b>${p.campo === true ? '<i class="em" aria-label="em campo"></i>' : ""}</span></span></th>
+      ${col.map(([k]) => `<td class="${k === "pts" ? "forte" : ""} ${k === "pf" && s.pf >= 5 ? "perigo" : ""}">${s[k] ?? 0}</td>`).join("")}
+    </tr>`;
+  };
+  return `<p class="aviso">Toca num jogador para o seguir.${jogaram.some(p => p.campo != null) ? ' <span class="em-leg"><i class="em"></i> em campo</span>' : ""}</p>
+    <div class="tabela-caixa"><table class="tabela">
+      <thead><tr><th scope="col">Jogador</th>${col.map(([, t]) => `<th scope="col">${t}</th>`).join("")}</tr></thead>
+      <tbody>${jogaram.map(linha).join("")}</tbody>
+    </table></div>
+    ${fora.length ? `<p class="aviso" style="margin-top:12px">Não jogam: ${fora.map(p => esc(p.nome)).join(", ")}</p>` : ""}`;
+}
+const abreviar = n => { const p = n.split(" "); return p.length > 1 ? `${p[0][0]}. ${p.slice(1).join(" ")}` : n; };
+const norm = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 function linhaJogador(p) {
   if (p.inativo) return "Não joga";
@@ -489,7 +569,10 @@ async function verLista(silencioso = false) {
   let html = "", grupo = null;
   abertas.forEach(a => {
     const g = a.par || "";
-    if (g !== grupo) { grupo = g; html += `<div class="grupo">${cabecalho(a)}</div>`; }
+    if (g !== grupo) {
+      grupo = g;
+      html += a.gid ? `<button class="grupo ir-jogo" data-gid="${esc(a.gid)}">${cabecalho(a)}</button>` : `<div class="grupo">${cabecalho(a)}</div>`;
+    }
     html += cartao(a, subiu[a.id]);
   });
   if (resolvidas.length) html += `<div class="grupo">Já resolvidas</div>` + resolvidas.map(a => cartao(a, subiu[a.id])).join("");
@@ -503,6 +586,10 @@ async function verLista(silencioso = false) {
     vibra(); S.filtro = b.dataset.filtro; guardar("filtro", S.filtro); verLista(true); window.scrollTo(0, 0);
   });
   ecra.querySelectorAll(".aposta-caixa").forEach(arrastarCartao);
+  ecra.querySelectorAll(".ir-jogo").forEach(b => b.onclick = e => {
+    if (!b.dataset.gid || S.aberta != null) return;
+    e.stopPropagation(); vibra(); abrirJogo(b.dataset.gid, "lista");
+  });
   ecra.querySelectorAll(".mais-acoes").forEach(b => b.onclick = () => {   // alternativa ao deslizar
     const caixa = b.closest(".aposta-caixa"); abrirCartao(caixa, S.aberta !== +caixa.dataset.id);
   });
@@ -571,7 +658,7 @@ const SEM_SOM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 // Cada aposta desliza para a esquerda e mostra dois botões: silenciar / ativar som e remover.
 function cartao(a, mais) {
   const aberta = S.aberta === a.id;
-  return `<div class="aposta-caixa" data-id="${a.id}">
+  return `<div class="aposta-caixa ${aberta ? "mexe" : ""}" data-id="${a.id}">
     <div class="acoes-fundo">
       <button class="acao som ${a.mudo ? "mudo" : ""}" data-id="${a.id}" tabindex="${aberta ? 0 : -1}"
               aria-label="${a.mudo ? "Voltar a receber" : "Silenciar"} avisos de ${esc(a.jogador)}">${a.mudo ? COM_SOM : SEM_SOM}<span>${a.mudo ? "Ativar som" : "Silenciar"}</span></button>
@@ -580,12 +667,16 @@ function cartao(a, mais) {
     </div>
     <div class="aposta ${mais ? "mexeu" : ""} ${aberta ? "aberta" : ""}" data-id="${a.id}">
       ${foto(a.foto, a.jogador)}
-      <div><div class="titulo">${esc(a.jogador)}${a.mudo ? `<span class="mudo-ic" aria-label="silenciado">${SEM_SOM}</span>` : ""}</div>${etiqueta(a)}</div>
+      <div><div class="titulo">${esc(a.jogador)}${a.mudo ? `<span class="mudo-ic" aria-label="silenciado">${SEM_SOM}</span>` : ""}</div>${etiqueta(a)}${campo(a)}</div>
       <button class="mais-acoes" data-id="${a.id}" aria-label="Opções de ${esc(a.jogador)}">⋯</button>
       <div class="estado">${progresso(a, mais)}</div>
     </div>
   </div>`;
 }
+
+// Em campo / no banco (só nos jogos a decorrer e quando a ESPN tem as substituições).
+const campo = a => a.fase !== "vivo" || a.em_campo == null ? ""
+  : `<span class="campo ${a.em_campo ? "sim" : ""}">${a.em_campo ? "Em campo" : "Banco"}</span>`;
 
 const ABERTO = 172;   // largura dos dois botões
 function arrastarCartao(caixa) {
@@ -602,7 +693,7 @@ function arrastarCartao(caixa) {
     const mx = e.clientX - x0, my = e.clientY - y0;
     if (horizontal == null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) {
       horizontal = Math.abs(mx) > Math.abs(my);
-      if (horizontal) { S.arrastar = true; fecharOutros(id); try { el.setPointerCapture(e.pointerId); } catch (_) {} }
+      if (horizontal) { S.arrastar = true; fecharOutros(id); caixa.classList.add("mexe"); try { el.setPointerCapture(e.pointerId); } catch (_) {} }
     }
     if (!horizontal) return;
     dx = mx; por(Math.max(-ABERTO - 30, Math.min(0, base + dx)));
@@ -623,6 +714,9 @@ function abrirCartao(caixa, abrir) {
   if (abrir) { fecharOutros(id); vibra(); }
   S.aberta = abrir ? id : (S.aberta === id ? null : S.aberta);
   el.style.transform = ""; el.classList.toggle("aberta", abrir);
+  clearTimeout(caixa.t);
+  if (abrir) caixa.classList.add("mexe");
+  else caixa.t = setTimeout(() => caixa.classList.remove("mexe"), 240);   // esconde os botões depois de fechar
   caixa.querySelectorAll(".acao").forEach(b => b.tabIndex = abrir ? 0 : -1);
 }
 function fecharOutros(id) {
@@ -638,7 +732,7 @@ function progresso(a, mais) {
   if (a.fase === "pre" || a.valor == null) {
     return esc((a.estado || "").replace(/[🟢🔴🟡🟣🔵⚪⚫🟠🟤]/gu, "").replace(/ {2,}/g, " ").trim());
   }
-  const jogo = a.jogo ? `<div class="mini ${a.fase === "vivo" ? "vivo" : ""}">${esc(a.jogo.fora.tri)} ${a.jogo.fora.score}–${a.jogo.casa.score} ${esc(a.jogo.casa.tri)}&emsp;${esc(a.fase === "fim" ? "Final" : a.jogo.relogio)}</div>` : "";
+  const jogo = a.jogo ? `<div class="mini ir-jogo ${a.fase === "vivo" ? "vivo" : ""}" data-gid="${esc(a.gid || "")}" role="button" tabindex="0">${esc(a.jogo.fora.tri)} ${a.jogo.fora.score}–${a.jogo.casa.score} ${esc(a.jogo.casa.tri)}&emsp;${esc(a.fase === "fim" ? "Final" : a.jogo.relogio)}</div>` : "";
   if (a.fase === "inativo") return `<div class="resumo">Não está a jogar</div>${jogo}`;
   const salto = mais ? `<em class="salto">+${mais}</em>` : "";
   const fim = a.fase === "fim";
@@ -729,9 +823,9 @@ function desenharNotifs() {
     <div class="notifs-cab"><b>Notificações</b>${S.notifs.length ? `<button id="limparNotifs">Apagar todas</button>` : ""}</div>
     ${S.notifs.length ? `<p class="notifs-dica">Desliza para a esquerda para apagar.</p>` : ""}
     ${S.notifs.length ? S.notifs.map(n => {
-      const [txt, ...resto] = n.texto.split("\n\n");
+      const txt = n.texto.split("\n\n")[0];
       return `<div class="notif-caixa" data-id="${n.id}"><div class="apagar-fundo">Apagar 🗑️</div><div class="notif ${n.id > lidaAte ? "nova" : ""}">${n.jogador ? foto(n.foto, n.jogador) : `<div class="foto rosto" aria-hidden="true"><span>🏀</span></div>`}
-        <div><div class="txt">${textoNotif(txt)}</div>${resto.length ? `<div class="jogo-n">${textoNotif(semCores(resto.join("\n")))}</div>` : ""}
+        <div><div class="txt">${textoNotif(txt)}</div>
         <div class="hora">${quandoFoi(n.ts)}</div></div></div></div>`;
     }).join("") : `<div class="vazio" style="margin:30px 10px">Ainda não há notificações.<br>Aparecem aqui quando um jogador que segues marca, leva falta ou tem uma stat anulada.</div>`}`;
   document.querySelectorAll(".notif-caixa").forEach(arrastavel);

@@ -136,7 +136,8 @@ def criar_app(tg_app, api: dict) -> web.Application:
                         "stats": {"pts": st.get("points", 0), "reb": st.get("reboundsTotal", 0),
                                   "ast": st.get("assists", 0), "3pt": st.get("threePointersMade", 0),
                                   "stl": st.get("steals", 0), "blk": st.get("blocks", 0),
-                                  "min": st.get("minutes", 0), "pf": st.get("fouls", 0)}})
+                                  "min": st.get("minutes", 0), "pf": st.get("fouls", 0)},
+                        "campo": p.get("emCampo") if game.get("gameStatus") == 2 else None})
                 equipas.append({**equipa(t, lg), "jogadores": jogadores})
         return web.json_response({"id": gid, "estado": game.get("gameStatus"),
                                   "relogio": api["relogio"](game) if game.get("gameStatus") != 1 else "",
@@ -204,11 +205,13 @@ def criar_app(tg_app, api: dict) -> web.Application:
             if s.jogador in vivos:
                 game, jp, inicio = vivos[s.jogador]
                 item["inicio"] = inicio
+                item["gid"] = game["gameId"]
                 item["par"] = f'{game["awayTeam"]["teamTricode"]}@{game["homeTeam"]["teamTricode"]}'
                 st = jp.get("statistics", {})
                 item.update({
                     "fase": "inativo" if jp.get("status") == "INACTIVE" else ("fim" if game.get("gameStatus") == 3 else "vivo"),
                     "valor": api["valor_de"](s.stat, st), "faltas": int(st.get("fouls", 0) or 0),
+                    "em_campo": jp.get("emCampo") if game.get("gameStatus") == 2 else None,
                     "jogo": {"fora": equipa(game["awayTeam"], lg), "casa": equipa(game["homeTeam"], lg),
                              "relogio": api["relogio"](game)}})
                 if STATS[s.stat].get("dd"):
@@ -224,6 +227,7 @@ def criar_app(tg_app, api: dict) -> web.Application:
                     j = proximo_jogo(calendario, p["team"], agora, estados)
                     if j:
                         item["inicio"] = j["inicio"].isoformat()
+                        item["gid"] = j["gameId"]
                         item["par"] = f'{j["fora"]}@{j["casa"]}'
             if s.id in acabados and item["fase"] != "fim":
                 item["fase"] = "fim"

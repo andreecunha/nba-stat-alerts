@@ -240,6 +240,31 @@ def situacao_linha(s: "Sub", valor: int) -> str:
     return "⚠️ não pode fazer mais nenhum" if pode == 0 else f"pode fazer mais {pode}"
 
 
+# Nome de cada campo do boxscore no singular / plural (para "+1 ressalto", "+2 assistências").
+NOME_CAMPO = {"points": ("ponto", "pontos"), "reboundsTotal": ("ressalto", "ressaltos"),
+              "assists": ("assistência", "assistências"), "threePointersMade": ("triplo", "triplos"),
+              "steals": ("roubo", "roubos"), "blocks": ("desarme", "desarmes")}
+
+
+def detalhe(stat: str, antes: dict | None, agora: dict, diferenca: int) -> str:
+    """O que mudou, por categoria: '+2 pontos, +1 ressalto' (PRA) ou '−3 pontos' (anulado)."""
+    campos = STATS[stat]["campos"]
+    if antes is None:   # sem leitura anterior guardada (ex.: bot reiniciado)
+        return f"{'+' if diferenca > 0 else '−'}{abs(diferenca)} {STATS[stat]['nome']}"
+    partes = []
+    for c in campos:
+        d = int(agora.get(c, 0) or 0) - int(antes.get(c, 0) or 0)
+        if d:
+            um, varios = NOME_CAMPO.get(c, (c, c))
+            partes.append(f"{'+' if d > 0 else '−'}{abs(d)} {um if abs(d) == 1 else varios}")
+    return ", ".join(partes) or f"{'+' if diferenca > 0 else '−'}{abs(diferenca)} {STATS[stat]['nome']}"
+
+
+def unidade(stat: str) -> str:
+    """Depois do total: nada nas stats simples ('→ 39'), a sigla nas combinadas ('→ 25 PRA')."""
+    return f" {stat.upper()}" if len(STATS[stat]["campos"]) > 1 else ""
+
+
 def com_marcador(linhas: list[str], game: dict) -> str:
     """Texto do alerta + linha em branco + marcador (menos saturado)."""
     return "\n".join(linhas) + "\n\n" + marcador(game)
@@ -247,9 +272,12 @@ def com_marcador(linhas: list[str], game: dict) -> str:
 
 class Alerta(tuple):
     """(chat_id, texto), com o nome e o id ESPN do jogador para as notificações da Mini App."""
-    def __new__(cls, msg, jogador="", pid=None):
+    def __new__(cls, msg, jogador="", pid=None, silencioso=False, curto=None):
         a = super().__new__(cls, msg)
         a.jogador, a.pid = jogador, pid
+        a.silencioso = getattr(msg, "silencioso", False) or silencioso   # chega no chat sem som
+        # Versão curta para o 🔔 da app: só o essencial, sem marcador nem relógio.
+        a.curto = curto or getattr(msg, "curto", None) or msg[1].split("\n\n")[0]
         return a
 
 
@@ -260,6 +288,8 @@ class Tracker:
     avisados: set = field(default_factory=set)   # (sub_id, game_id) já avisados de nome ambíguo
     terminados: list = field(default_factory=list)  # sub_ids cujo jogo acabou (o bot remove-os mais tarde)
     faltas: dict = field(default_factory=dict)      # (chat_id, jogador, game_id) -> nº de faltas já visto
+    campo: dict = field(default_factory=dict)       # (chat_id, jogador, game_id) -> em campo (True) / banco (False)
+    comp: dict = field(default_factory=dict)        # (sub_id, game_id) -> estatísticas da última leitura
 
     def semear(self, s: Sub, gid: str, st: dict):
         """Regista o valor atual de um seguimento novo a meio do jogo, para o próximo cesto já ser avisado."""
@@ -379,28 +409,37 @@ class Tracker:
                 else:
                     anterior = self.ultimo[chave]
                     self.ultimo[chave] = valor
+                    antes_st = self.comp.get(chave)
+                    o_que = detalhe(s.stat, antes_st, st, valor - anterior)
+                    total = f"<b>{valor}</b>{unidade(s.stat)}"
                     if valor > anterior:
-                        linhas = [f"🏀 <b>{nome}</b> +{valor - anterior} {info['nome']} → <b>{valor}</b>"]
+                        linhas = [f"🏀 <b>{nome}</b> {o_que} → {total}"]
+                        curto = f"🏀 <b>{nome}</b> {o_que} → {total}"
                         if s.linha is not None:
                             falta = alvo(s.linha) - valor
                             if falta <= 0 and "batida" not in fl:
                                 fl.update({"batida", "perto"})
                                 if s.under:
                                     linhas.insert(0, f"❌ <b>UNDER PERDIDO</b> — passou de {s.linha:g} {info['nome']}")
+                                    curto = f"❌ <b>{nome}</b> {o_que} → {total} · under perdido"
                                 else:
                                     linhas.insert(0, f"✅ <b>LINHA BATIDA</b> — mais de {s.linha:g} {info['nome']}")
+                                    curto = f"✅ <b>{nome}</b> {o_que} → {total} · linha batida"
                             elif 0 < falta <= s.margem() and "perto" not in fl:
                                 fl.add("perto")
                                 if s.under:
                                     linhas.insert(0, f"⚠️ <b>CUIDADO COM O UNDER</b> — {situacao_linha(s, valor)}")
+                                    curto = f"⚠️ <b>{nome}</b> {o_que} → {total} · {situacao_linha(s, valor).replace('⚠️ ', '')}"
                                 else:
                                     linhas.insert(0, f"⚠️ <b>PERTO DA LINHA</b> — falta{'m' if falta > 1 else ''} {falta}")
+                                    curto = f"⚠️ <b>{nome}</b> {o_que} → {total} · falta{'m' if falta > 1 else ''} {falta}"
                             linhas.append(f"{'Under' if s.under else 'Over'} {s.linha:g} · {situacao_linha(s, valor)}")
-                        msgs.append((s.chat_id, com_marcador(linhas, game)))
+                        msgs.append(Alerta((s.chat_id, com_marcador(linhas, game)), curto=curto))
                     elif valor < anterior:
                         # Correção de estatística (cesto ou ressalto retirado, por exemplo).
-                        linhas = [f"↩️ <b>ANULADO</b> — <b>{nome}</b> {anterior - valor} {info['nome']} retirado{'s' if anterior - valor > 1 else ''}",
-                                  f"Agora tem <b>{valor}</b> {info['nome']}"]
+                        linhas = [f"↩️ <b>ANULADO</b> — <b>{nome}</b> {o_que.replace('−', '')} retirado{'s' if anterior - valor > 1 else ''}",
+                                  f"Agora tem {total}" + ("" if unidade(s.stat) else f" {info['nome']}")]
+                        curto = f"↩️ Anulado: <b>{nome}</b> {o_que} → {total}"
                         if s.linha is not None:
                             falta = alvo(s.linha) - valor
                             if falta > 0:
@@ -411,18 +450,33 @@ class Tracker:
                                 if falta > s.margem():
                                     fl.discard("perto")
                             linhas.append(f"{'Under' if s.under else 'Over'} {s.linha:g} · {situacao_linha(s, valor)}")
-                        msgs.append((s.chat_id, com_marcador(linhas, game)))
+                            if "deixou de estar" in linhas[-2] or "volta a estar" in linhas[-2]:
+                                curto += " · " + linhas[-2].split(" ", 1)[1].lower()
+                        msgs.append(Alerta((s.chat_id, com_marcador(linhas, game)), curto=curto))
 
+                if not info.get("dd"):
+                    self.comp[chave] = {c: int(st.get(c, 0) or 0) for c in info["campos"]}
                 chave_f = (s.chat_id, nome, gid)
+                # Entrou / saiu de campo: um aviso por jogador (mesmo com várias apostas), sem som no chat.
+                agora_campo = p.get("emCampo")
+                if not s.mudo and agora_campo is not None and game.get("gameStatus") == 2 and "inativo" not in fl:
+                    antes_campo = self.campo.get(chave_f)
+                    self.campo[chave_f] = agora_campo
+                    if antes_campo is not None and agora_campo != antes_campo:
+                        texto = (f"🟢 <b>{nome}</b> entrou em campo" if agora_campo
+                                 else f"🪑 <b>{nome}</b> foi para o banco")
+                        msgs.append(Alerta((s.chat_id, f"{texto}\n\n{marcador(game)}"), silencioso=True))
                 faltas = int(st.get("fouls", 0) or 0)
                 vistas = self.faltas.get(chave_f)
                 self.faltas[chave_f] = max(faltas, vistas or 0)
                 if vistas is not None and faltas > vistas and not final and "inativo" not in fl:
                     if faltas >= 6:
-                        msgs.append((s.chat_id, f"🟥 <b>{nome}</b> fez a 6.ª falta e <b>está fora do jogo</b> (foul out)\n\n{marcador(game)}"))
+                        msgs.append(Alerta((s.chat_id, f"🟥 <b>{nome}</b> fez a 6.ª falta e <b>está fora do jogo</b> (foul out)\n\n{marcador(game)}"),
+                                           curto=f"🟥 <b>{nome}</b> está fora do jogo (6 faltas)"))
                     elif faltas >= 4:
-                        msgs.append((s.chat_id, f"🟨 <b>{nome}</b> tem <b>{faltas} faltas</b> — à 6.ª sai do jogo"
-                                                f"{' (falta só 1!)' if faltas == 5 else ''}\n\n{marcador(game)}"))
+                        msgs.append(Alerta((s.chat_id, f"🟨 <b>{nome}</b> tem <b>{faltas} faltas</b> — à 6.ª sai do jogo"
+                                                       f"{' (falta só 1!)' if faltas == 5 else ''}\n\n{marcador(game)}"),
+                                           curto=f"🟨 <b>{nome}</b> {faltas} faltas"))
 
                 if final and "final" not in fl:
                     fl.add("final")
@@ -441,7 +495,7 @@ class Tracker:
                 if s.mudo:   # silenciada: o estado continua a ser seguido, mas os avisos não saem
                     del msgs[n0:]
                 for k in range(n0, len(msgs)):   # cada alerta leva o jogador (para as notificações da app)
-                    msgs[k] = Alerta(msgs[k], s.jogador if p is None else nome_completo(p), (p or {}).get("id"))
+                    msgs[k] = Alerta(msgs[k], s.jogador if p is None else html.unescape(nome_completo(p)), (p or {}).get("id"))
         for chat_id, jogadores in comecos.items():
             if len(jogadores) == 1:
                 (nome, (pid, apostas)), = jogadores.items()
@@ -579,6 +633,62 @@ def jogo_espn(ev: dict) -> dict:
             "awayTeam": eq.get("away", {"teamTricode": "?", "score": 0})}
 
 
+_ENTRA = re.compile(r"^\s*(.+?) enters the game for (.+?)\.?\s*$", re.I)
+
+
+def em_campo_espn(summary: dict) -> dict[str, bool]:
+    """Quem está em campo agora: id do jogador -> True (em campo) / False (banco).
+    1.º tenta o campo 'active' da ESPN; se não der 5 por equipa, parte do 5 inicial e aplica as
+    substituições do jogo a jogo ("X enters the game for Y"). Se as contas não baterem, devolve {}."""
+    atletas = {}   # id -> (equipa, nome normalizado, titular, active)
+    for bloco in summary.get("boxscore", {}).get("players", []):
+        eq = bloco.get("team", {}).get("abbreviation", "?")
+        for tabela in bloco.get("statistics", []):
+            for a in tabela.get("athletes", []):
+                aid = str(a.get("athlete", {}).get("id", ""))
+                if aid and aid not in atletas:
+                    atletas[aid] = (eq, norm(a.get("athlete", {}).get("displayName", "")),
+                                    bool(a.get("starter")), a.get("active"))
+    if not atletas:
+        return {}
+
+    def cinco(ids):
+        conta = {}
+        for i in ids:
+            conta[atletas[i][0]] = conta.get(atletas[i][0], 0) + 1
+        return len(conta) == 2 and all(n == 5 for n in conta.values())
+
+    ativos = {i for i, (_, _, _, act) in atletas.items() if act is True}
+    if cinco(ativos):
+        return {i: i in ativos for i in atletas}
+
+    em = {i for i, (_, _, titular, _) in atletas.items() if titular}
+    if not cinco(em):
+        return {}
+    so_nome = {}
+    for i, (_, nome, _, _) in atletas.items():
+        so_nome.setdefault(nome, []).append(i)
+
+    def achar(nome):
+        ids = so_nome.get(norm(nome), [])
+        return ids[0] if len(ids) == 1 else None   # nome repetido nos dois plantéis: não arrisca
+    for jogada in summary.get("plays", []):
+        if "substitution" not in str((jogada.get("type") or {}).get("text", "")).lower():
+            continue
+        entra = sai = None
+        m = _ENTRA.match(jogada.get("text", "") or "")
+        if m:
+            entra, sai = achar(m.group(1)), achar(m.group(2))
+        if not (entra and sai):
+            ps = [str(p.get("athlete", {}).get("id", "")) for p in jogada.get("participants", [])]
+            if len(ps) >= 2:
+                entra, sai = ps[0], ps[1]
+        if entra in atletas and sai in atletas and sai in em:
+            em.discard(sai)
+            em.add(entra)
+    return {i: i in em for i in atletas} if cinco(em) else {}
+
+
 def box_espn(summary: dict, gid: str) -> dict:
     """'summary' da ESPN -> boxscore no formato da NBA ({'game': {..., 'homeTeam': {'players': [...]}}})."""
     comp = summary["header"]["competitions"][0]
@@ -587,6 +697,8 @@ def box_espn(summary: dict, gid: str) -> dict:
     for lado in ("home", "away"):
         eq.setdefault(lado, {"teamTricode": "?", "score": 0})["players"] = []
     lado_de = {v["teamTricode"]: k for k, v in eq.items()}
+    ao_vivo = st.get("type", {}).get("state") == "in"
+    campo = em_campo_espn(summary) if ao_vivo else {}
     for bloco in summary.get("boxscore", {}).get("players", []):
         abrev = bloco.get("team", {}).get("abbreviation", "?")
         lado = lado_de.get(ESPN_PARA_NBA.get(abrev, abrev))
@@ -611,7 +723,8 @@ def box_espn(summary: dict, gid: str) -> dict:
                     "id": str(a.get("athlete", {}).get("id", "")),
                     "name": nome, "firstName": partes[0], "familyName": partes[1] if len(partes) > 1 else "",
                     "status": "INACTIVE" if a.get("didNotPlay") else "ACTIVE",
-                    "notPlayingReason": a.get("reason", ""), "statistics": stats})
+                    "notPlayingReason": a.get("reason", ""), "statistics": stats,
+                    "emCampo": campo.get(str(a.get("athlete", {}).get("id", "")))})
     return {"game": {"gameId": gid, "gameStatus": ESTADOS_ESPN.get(st.get("type", {}).get("state"), 1),
                      "period": st.get("period", 0), "gameClock": _relogio_espn(st.get("displayClock")),
                      "homeTeam": eq["home"], "awayTeam": eq["away"]}}

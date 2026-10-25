@@ -56,6 +56,11 @@ A lista tem duas abas, «Os meus jogos» e «Ao vivo», agrupadas por jogo; as a
 Os jogos que estão a 15 minutos de começar têm uma luz vermelha a piscar.
 No 🔔 cada notificação apaga-se a deslizar para a esquerda (ou todas de uma vez), e cada aposta desliza para a
 esquerda para a silenciar (sem avisos, mas continua na lista) ou remover.
+Nos jogos a decorrer, cada aposta mostra se o jogador está **em campo** ou no **banco** (calculado a partir do
+5 inicial e das substituições do jogo a jogo da ESPN). Quando um jogador da lista entra ou sai de campo, chega um aviso
+(no 🔔 e no chat, este sem som).
+No 🔔 as notificações vêm curtas (ex.: «LeBron James +2 pontos, +1 ressalto → 25 PRA»). Tocar no jogo de uma aposta
+abre a ficha do jogo com as estatísticas de todos os jogadores, que se atualiza sozinha.
 
 A app é servida pelo próprio bot (`webapp.py` + `app/index.html`) e precisa de HTTPS — no Fly.io fica em
 `https://<nome-da-app>.fly.dev/app` e o bot configura o botão sozinho. Noutro alojamento, define `WEBAPP_URL`.
