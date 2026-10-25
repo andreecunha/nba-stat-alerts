@@ -152,22 +152,65 @@ def criar_app(tg_app, api: dict) -> web.Application:
                                    "foto": FOTO.format(p["id"]) if p.get("id") else "", "pos": p.get("pos", ""),
                                    "lesao": p.get("lesao", "")} for p in achados])
 
+    async def ao_vivo(nomes: set) -> dict:
+        """Jogos a decorrer ou acabados hoje: nome do jogador -> (jogo, jogador)."""
+        achados = {}
+        try:
+            jogos_hoje = await dados().jogos_hoje()
+        except Exception:
+            return achados
+        for g in jogos_hoje:
+            if g["gameStatus"] == 1:
+                continue
+            try:
+                game = (await dados().boxscore(g["gameId"]))["game"]
+            except Exception:
+                continue
+            todos = game["homeTeam"].get("players", []) + game["awayTeam"].get("players", [])
+            for nome in nomes:
+                r = api["encontrar"](todos, nome)
+                if len(r) == 1 and (nome not in achados or game.get("gameStatus") == 2):
+                    achados[nome] = (game, r[0])
+        return achados
+
     async def lista(request):
+        """A lista com o estado ao vivo de cada aposta (a app pede isto de 10 em 10 segundos)."""
         chat_id = request["chat_id"]
         subs = api["subs_de"](chat_id)
-        estados = []
-        for s in subs:
-            try:
-                estados.append(_sem_html(await api["estado"](dados(), s)))
-            except Exception:
-                estados.append("")
         acabados = api["fins"](chat_id)
+        try:
+            todos = await dados().jogadores()
+        except Exception:
+            todos = []
+        lg = await logos()
+        vivos = await ao_vivo({s.jogador for s in subs})
         out = []
-        for s, e in zip(subs, estados):
-            if s.id in acabados:
-                e = "🏁 Jogo terminado"
-            out.append({"id": s.id, "jogador": s.jogador, "stat": s.stat, "stat_nome": STATS[s.stat]["nome"],
-                        "linha": s.linha, "lado": s.lado, "estado": e})
+        for s in subs:
+            achados = api["encontrar"](todos, s.jogador) if todos else []
+            p = achados[0] if len(achados) == 1 else {}
+            item = {"id": s.id, "jogador": s.jogador, "stat": s.stat, "stat_nome": STATS[s.stat]["nome"],
+                    "linha": s.linha, "lado": s.lado, "foto": FOTO.format(p["id"]) if p.get("id") else "",
+                    "team": p.get("team", ""), "logo": lg.get(p.get("team", ""), ""), "fase": "pre", "estado": ""}
+            if s.jogador in vivos:
+                game, jp = vivos[s.jogador]
+                st = jp.get("statistics", {})
+                item.update({
+                    "fase": "inativo" if jp.get("status") == "INACTIVE" else ("fim" if game.get("gameStatus") == 3 else "vivo"),
+                    "valor": api["valor_de"](s.stat, st), "faltas": int(st.get("fouls", 0) or 0),
+                    "jogo": {"fora": equipa(game["awayTeam"], lg), "casa": equipa(game["homeTeam"], lg),
+                             "relogio": api["relogio"](game)}})
+                if STATS[s.stat].get("dd"):
+                    item.update({"alvo_dd": STATS[s.stat]["dd"], "resumo": api["resumo_dd"](st)})
+                elif s.linha is not None:
+                    item.update({"alvo": api["alvo"](s.linha), "margem": s.margem()})
+            else:
+                try:
+                    item["estado"] = _sem_html(await api["estado"](dados(), s))
+                except Exception:
+                    pass
+            if s.id in acabados and item["fase"] != "fim":
+                item["fase"] = "fim"
+            out.append(item)
         return web.json_response(out)
 
     async def seguir(request):
@@ -200,6 +243,13 @@ def criar_app(tg_app, api: dict) -> web.Application:
         sid = int(request.match_info["sid"])
         api["remover"](chat_id, sid)
         return web.json_response({"ok": True})
+
+    async def notificacoes(request):
+        lista = api["notificacoes"](request["chat_id"])
+        for n in lista:
+            n["foto"] = FOTO.format(n["pid"]) if n.get("pid") else ""
+            n.pop("pid", None)
+        return web.json_response(lista)
 
     async def media(request):
         nome, stat = request.query.get("jogador", ""), request.query.get("stat", "")
@@ -237,5 +287,6 @@ def criar_app(tg_app, api: dict) -> web.Application:
         web.get("/api/config", config), web.get("/api/jogos", jogos), web.get("/api/jogo/{gid}", jogo),
         web.get("/api/procurar", procurar), web.get("/api/lista", lista), web.post("/api/seguir", seguir),
         web.delete("/api/lista/{sid}", remover), web.get("/api/media", media), web.get("/api/analise", analise),
+        web.get("/api/notificacoes", notificacoes),
     ])
     return app

@@ -49,7 +49,9 @@ LAL 95–90 GSW · 4.º P 8:02
 
 Além do chat, o bot tem uma app dentro do Telegram (botão **📱 Abrir app** ao lado da caixa de texto):
 jogos de hoje com logos, plantéis com fotos e lesões, procura de jogadores, seletor da linha com régua e a
-média dos últimos 5 jogos, análise com gráfico e a tua lista de apostas. Os alertas continuam a chegar no chat.
+média dos últimos 5 jogos, análise com gráfico e a tua lista de apostas ao vivo (atualiza a cada 10 s, com barra
+de progresso até à linha, ✅/❌ e destaque quando o valor sobe). O 🔔 no canto superior direito mostra as
+notificações (cestos, linhas batidas, stats anuladas, faltas), as mesmas que chegam no chat.
 
 A app é servida pelo próprio bot (`webapp.py` + `app/index.html`) e precisa de HTTPS — no Fly.io fica em
 `https://<nome-da-app>.fly.dev/app` e o bot configura o botão sozinho. Noutro alojamento, define `WEBAPP_URL`.
@@ -104,14 +106,14 @@ Instala tudo e cria um serviço `systemd` que arranca sozinho.
 ### Variáveis opcionais
 | Variável | Por defeito | O que faz |
 |---|---|---|
-| `INTERVALO` | `20` | Segundos entre leituras dos jogos |
+| `INTERVALO` | `10` | Segundos entre leituras dos jogos |
 | `DB_PATH` | `subs.db` | Onde guardar as listas |
 | `REMOVER_APOS` | `10` | Minutos depois do fim do jogo até o jogador sair da lista |
 | `WEBAPP_URL` | `https://<FLY_APP_NAME>.fly.dev/app` | Endereço da Mini App (tem de ser HTTPS) |
 
 ## Como funciona
 
-- **Estatísticas ao vivo**: endpoints públicos da ESPN (scoreboard e summary), lidos a cada 20 s
+- **Estatísticas ao vivo**: endpoints públicos da ESPN (scoreboard e summary), lidos a cada 10 s
 - **Calendário**: scoreboard da ESPN dos próximos 7 dias
 - **Equipa de cada jogador e lesões**: plantéis públicos da ESPN
 - **Histórico para a análise**: gamelog público da ESPN (época atual e 3 anteriores)

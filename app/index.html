@@ -39,10 +39,31 @@ img { display: block; }
 .esconder { display: none !important; }
 
 /* ---------- cabeçalho ---------- */
-.topo { display: flex; align-items: baseline; justify-content: space-between; padding: 18px 18px 10px; }
+.topo { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 6px 18px; }
 .marca { font-family: var(--cond); font-weight: 800; font-size: 30px; line-height: 1; letter-spacing: .01em; }
 .marca b { color: var(--nba); font-weight: 800; }
-.saudacao { color: var(--suave); font-size: 14px; }
+.marca small { font-family: var(--corpo); font-weight: 500; font-size: 13px; color: var(--suave); letter-spacing: 0; margin-left: 4px; }
+.sino { position: relative; width: 42px; height: 42px; border-radius: 50%; background: var(--painel); display: grid; place-items: center; }
+.sino svg { width: 21px; height: 21px; }
+.sino i { position: absolute; top: -5px; right: -7px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+          background: var(--nba); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; line-height: 17px;
+          text-align: center; border: 2px solid var(--noite); box-sizing: content-box; }
+.sino.toca svg { animation: toca .9s ease-in-out; transform-origin: 50% 15%; }
+@keyframes toca { 20% { transform: rotate(14deg); } 40% { transform: rotate(-12deg); } 60% { transform: rotate(8deg); } 80% { transform: rotate(-4deg); } }
+@media (prefers-reduced-motion: reduce) { .sino.toca svg { animation: none; } }
+
+/* ---------- notificações ---------- */
+.notifs-cab { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px 10px; }
+.notifs-cab b { font-family: var(--cond); font-weight: 800; font-size: 26px; }
+.notif { display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--risca); }
+.notif:last-child { border-bottom: 0; }
+.notif .foto { width: 40px; height: 40px; }
+.notif .foto span { font-size: 15px; }
+.notif .txt { font-size: 15px; line-height: 1.35; white-space: pre-line; }
+.notif .txt b { font-weight: 700; }
+.notif .jogo-n { color: var(--suave); font-size: 13px; margin-top: 3px; white-space: pre-line; }
+.notif .hora { color: var(--suave); font-size: 12px; margin-top: 3px; }
+.notif.nova { background: linear-gradient(90deg, rgba(230, 30, 50, .10), transparent 70%); border-radius: 10px; }
 h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 18px 10px; }
 
 /* ---------- separadores em baixo ---------- */
@@ -118,14 +139,36 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 .caixa::before { content: "🔎"; position: absolute; left: 14px; top: 13px; font-size: 16px; opacity: .8; }
 
 /* ---------- lista ---------- */
-.aposta { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: start; margin: 0 14px 10px;
+.aposta { display: grid; grid-template-columns: 52px 1fr auto; gap: 6px 12px; align-items: center; margin: 0 14px 10px;
           padding: 14px; background: var(--painel); border-radius: var(--raio); }
 .aposta .titulo { font-weight: 700; font-size: 17px; }
 .etiqueta { display: inline-block; margin-top: 6px; font-family: var(--cond); font-weight: 700; font-size: 17px;
             padding: 2px 9px; border-radius: 7px; background: var(--nba); }
 .etiqueta.under { background: #3b4a8a; }
 .etiqueta.sem { background: var(--painel-2); color: var(--suave); }
-.aposta .estado { grid-column: 1 / -1; color: var(--suave); font-size: 14px; white-space: pre-line; }
+.aposta .foto { width: 52px; height: 52px; }
+.aposta .estado { grid-column: 2 / -1; color: var(--suave); font-size: 14px; white-space: pre-line; }
+.aposta .estado:has(.valor) { white-space: normal; }
+.aposta .valor { display: flex; align-items: baseline; gap: 6px; color: var(--suave); font-size: 15px; white-space: normal; }
+.aposta .icone { font-size: 13px; line-height: 1; }
+.medidor { flex: none; width: 84px; display: grid; gap: 4px; justify-items: end; }
+.medidor .num { display: flex; align-items: center; gap: 5px; font-size: 13px; line-height: 1; }
+.medidor .num b { font-family: var(--cond); font-weight: 700; font-size: 17px; color: var(--texto); font-variant-numeric: tabular-nums; }
+.medidor .salto { font-size: 14px; }
+.aposta .baixo { display: flex; align-items: flex-end; gap: 10px; margin-top: 6px; }
+.aposta .baixo .mini { margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aposta .valor b { font-family: var(--cond); font-weight: 800; font-size: 26px; color: var(--texto); line-height: 1; }
+.aposta .falta { margin-left: auto; font-weight: 700; font-size: 14px; }
+.barra-prog { flex: none; width: 84px; height: 5px; border-radius: 3px; background: var(--painel-2); overflow: hidden; }
+.barra-prog i { display: block; height: 100%; border-radius: 4px; transition: width .6s ease-out; }
+.aposta .resumo { font-size: 14px; color: var(--suave); }
+.aposta .mini { font-size: 13px; color: var(--suave); margin-top: 4px; }
+.salto { font-style: normal; font-family: var(--cond); font-weight: 800; font-size: 18px; color: var(--bate);
+         animation: salta 2.4s ease-out forwards; }
+@keyframes salta { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
+.aposta.mexeu { animation: brilha 1.6s ease-out; }
+@keyframes brilha { 0% { box-shadow: 0 0 0 2px var(--bate); } 100% { box-shadow: 0 0 0 2px transparent; } }
+@media (prefers-reduced-motion: reduce) { .salto, .aposta.mexeu { animation: none; } .barra-prog i { transition: none; } }
 .tirar { width: 34px; height: 34px; border-radius: 50%; background: var(--painel-2); color: var(--suave); font-size: 18px; }
 
 .vazio { margin: 40px 24px; text-align: center; color: var(--suave); line-height: 1.5; }
@@ -214,8 +257,12 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 </head>
 <body>
 <header class="topo">
-  <div class="marca"><b>NBA</b> ALERTS</div>
-  <div class="saudacao" id="saudacao"></div>
+  <div class="marca"><b>NBA</b> ALERTS <small>by André Cunha</small></div>
+  <button class="sino" id="sino" aria-label="Notificações">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+    <i class="esconder" id="naoLidas"></i>
+  </button>
 </header>
 
 <main id="ecra"></main>
@@ -265,6 +312,7 @@ const foto = (src, nome, classe = "foto") => `<div class="${classe} rosto" aria-
 
 /* ---------- navegação ---------- */
 function mudarAba(aba) {
+  clearTimeout(verLista.t);
   S.aba = aba; S.jogo = null;
   document.querySelectorAll(".aba").forEach(b => b.setAttribute("aria-selected", b.dataset.aba === aba));
   if (tg) tg.BackButton.hide();
@@ -368,25 +416,97 @@ async function procurar(texto) {
 }
 
 /* ---------- lista ---------- */
-async function verLista() {
-  aCarregar();
-  try { S.lista = await api("/api/lista"); } catch (e) { return erro(e.message, verLista); }
+const ATUALIZAR = 10000;   // a lista atualiza-se de 10 em 10 segundos
+S.valores = {};             // último valor visto de cada aposta, para mostrar o "+2"
+
+async function verLista(silencioso = false) {
+  clearTimeout(verLista.t);
+  if (!silencioso) aCarregar();
+  let nova;
+  try { nova = await api("/api/lista"); }
+  catch (e) { if (!silencioso) return erro(e.message, () => verLista()); nova = S.lista; }
   if (S.aba !== "lista") return;
-  contar();
+  S.lista = nova; contar();
   if (!S.lista.length) {
     ecra.innerHTML = `<div class="vazio">Ainda não segues nenhuma aposta.<br>Escolhe um jogo ou procura um jogador.<br>
       <button class="botao principal" id="irJogos">Ver jogos de hoje</button></div>`;
     document.getElementById("irJogos").onclick = () => mudarAba("jogos"); return;
   }
-  ecra.innerHTML = `<h2>A minha lista</h2>` + S.lista.map(a => `
-    <div class="aposta">
-      <div><div class="titulo">${esc(a.jogador)}</div>${etiqueta(a)}</div>
-      <button class="tirar" data-id="${a.id}" aria-label="Deixar de seguir ${esc(a.jogador)}">✕</button>
-      <div class="estado">${esc(a.estado.replace(/[🟢🔴🟡🟣🔵⚪⚫🟠🟤]/gu, "").replace(/ {2,}/g, " ").trim())}</div>
-    </div>`).join("");
+  // O que subiu desde a última vez (para o "+N")?
+  const subiu = {};
+  S.lista.forEach(a => {
+    if (a.valor == null) return;
+    const antes = S.valores[a.id];
+    if (antes != null && a.valor > antes) subiu[a.id] = a.valor - antes;
+    S.valores[a.id] = a.valor;
+  });
+  const algumVivo = S.lista.some(a => a.fase === "vivo");
+  ecra.innerHTML = `<h2>A minha lista</h2>
+    ${algumVivo ? `<p class="aviso vivo">Ao vivo, atualiza sozinha</p>` : ""}` + S.lista.map(a => cartao(a, subiu[a.id])).join("");
   ecra.querySelectorAll(".tirar").forEach(b => b.onclick = async () => {
+    const a = S.lista.find(x => String(x.id) === b.dataset.id);
+    const desc = a.linha == null ? a.stat_nome : `${a.lado === "under" ? "under" : "over"} ${fmt(a.linha)} ${a.stat_nome}`;
+    if (!await confirmar(`Deixar de seguir ${a.jogador} (${desc})?`)) return;
     try { await api("/api/lista/" + b.dataset.id, { method: "DELETE" }); vibra("ok"); toast("Deixaste de seguir"); verLista(); }
     catch (e) { toast(e.message); }
+  });
+  if (Object.keys(subiu).length) vibra("ok");
+  verLista.t = setTimeout(() => { if (S.aba === "lista" && !document.hidden) verLista(true); }, ATUALIZAR);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && S.aba === "lista") verLista(true); });
+
+function cartao(a, mais) {
+  return `<div class="aposta ${mais ? "mexeu" : ""}" data-id="${a.id}">
+    ${foto(a.foto, a.jogador)}
+    <div><div class="titulo">${esc(a.jogador)}</div>${etiqueta(a)}</div>
+    <button class="tirar" data-id="${a.id}" aria-label="Deixar de seguir ${esc(a.jogador)}">✕</button>
+    <div class="estado">${progresso(a, mais)}</div>
+  </div>`;
+}
+
+// Valor atual, ✅/❌ e, em baixo, o jogo e uma barra pequena até à linha.
+function progresso(a, mais) {
+  if (a.fase === "pre" || a.valor == null) {
+    return esc((a.estado || "").replace(/[🟢🔴🟡🟣🔵⚪⚫🟠🟤]/gu, "").replace(/ {2,}/g, " ").trim());
+  }
+  const jogo = a.jogo ? `<div class="mini ${a.fase === "vivo" ? "vivo" : ""}">${esc(a.jogo.fora.tri)} ${a.jogo.fora.score}–${a.jogo.casa.score} ${esc(a.jogo.casa.tri)}&emsp;${esc(a.fase === "fim" ? "Final" : a.jogo.relogio)}</div>` : "";
+  if (a.fase === "inativo") return `<div class="resumo">Não está a jogar</div>${jogo}`;
+  const salto = mais ? `<em class="salto">+${mais}</em>` : "";
+  const fim = a.fase === "fim";
+  const sim = '<span class="icone" aria-label="bateu">✅</span>', nao = '<span class="icone" aria-label="não bateu">❌</span>';
+
+  if (a.alvo_dd) {   // duplo / triplo-duplo
+    const ok = a.valor >= a.alvo_dd;
+    return `<div class="resumo">${esc(a.resumo)}</div>
+      <div class="baixo">${jogo}${medidor(`${a.valor}/${a.alvo_dd}`, salto + (ok ? sim : fim ? nao : ""),
+        barra(a.valor / a.alvo_dd, ok ? "var(--bate)" : fim ? "var(--falha)" : "var(--linha)"))}</div>`;
+  }
+  if (a.alvo == null) {   // sem linha
+    return `<div class="baixo">${jogo}${medidor(a.valor, salto, "")}</div>`;
+  }
+  const passou = a.valor >= a.alvo;
+  let ok, cor = "var(--linha)";
+  if (a.lado === "under") {
+    if (passou) { ok = false; cor = "var(--falha)"; }
+    else if (fim) { ok = true; cor = "var(--bate)"; }
+  } else {
+    if (passou) { ok = true; cor = "var(--bate)"; }
+    else if (fim) { ok = false; cor = "var(--falha)"; }
+  }
+  const icone = ok === true ? sim : ok === false ? nao : "";
+  const fracao = a.lado === "under" && ok === true ? 1 : a.valor / a.alvo;
+  return `<div class="baixo">${jogo}${medidor(`${a.valor}/${a.alvo}`, salto + icone, barra(fracao, cor))}</div>`;
+}
+// Os números ficam mesmo em cima da barra pequena, no canto inferior direito.
+const medidor = (num, extra, barraHtml) =>
+  `<div class="medidor"><div class="num">${extra}<b>${num}</b></div>${barraHtml}</div>`;
+const barra = (fracao, cor) => `<div class="barra-prog"><i style="width:${Math.max(3, Math.min(100, fracao * 100))}%;background:${cor}"></i></div>`;
+
+// Pergunta de confirmação: a do próprio Telegram, ou a do browser fora do Telegram.
+function confirmar(texto) {
+  return new Promise(ok => {
+    try { if (tg && tg.showConfirm) { tg.showConfirm(texto, ok); return; } } catch (e) {}
+    ok(window.confirm(texto));
   });
 }
 function etiqueta(a) {
@@ -398,6 +518,66 @@ function contar() {
   const c = document.getElementById("conta");
   c.textContent = S.lista.length; c.classList.toggle("esconder", !S.lista.length);
 }
+
+/* ---------- notificações (o mesmo que chega no chat) ---------- */
+const guardado = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+S.notifs = []; S.visto = +(guardado("notif_visto") || 0);
+
+async function verNotifs() {
+  clearTimeout(verNotifs.t);
+  try {
+    const nova = await api("/api/notificacoes");
+    const antes = S.notifs.length ? S.notifs[0].id : null;
+    S.notifs = nova;
+    const ultimo = nova.length ? nova[0].id : 0;
+    if (antes != null && ultimo > antes) { const s = document.getElementById("sino"); s.classList.remove("toca"); void s.offsetWidth; s.classList.add("toca"); }
+    if (S.folha && S.folha.notifs) { S.visto = ultimo; guardar("notif_visto", ultimo); desenharNotifs(); }
+    marcarNaoLidas();
+  } catch (e) {}
+  verNotifs.t = setTimeout(() => { if (!document.hidden) verNotifs(); else verNotifs.t = null; }, ATUALIZAR);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !verNotifs.t) verNotifs(); });
+
+function marcarNaoLidas() {
+  const n = S.notifs.filter(x => x.id > S.visto).length, el = document.getElementById("naoLidas");
+  el.textContent = n > 9 ? "9+" : n; el.classList.toggle("esconder", !n);
+  document.getElementById("sino").setAttribute("aria-label", n ? `Notificações, ${n} novas` : "Notificações");
+}
+
+function quandoFoi(ts) {
+  const s = Date.now() / 1000 - ts;
+  if (s < 60) return "agora";
+  if (s < 3600) return `há ${Math.floor(s / 60)} min`;
+  const d = new Date(ts * 1000);
+  return (s < 86400 && d.getDate() === new Date().getDate() ? "" : "ontem, ") + d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+}
+// O texto vem do bot em HTML simples: tudo escapado, só o negrito volta.
+const semCores = t => t.replace(/[🟢🔴🟡🟣🔵⚪⚫🟠🟤]/gu, "").split("\n").map(l => l.replace(/ {2,}/g, " ").trim()).filter(Boolean).join("  ·  ");
+const textoNotif = t => esc(t).replace(/&lt;(\/?)b&gt;/g, "<$1b>");
+
+function desenharNotifs() {
+  const lidaAte = S.folha.lidaAte;
+  document.getElementById("folha").innerHTML = `<div class="pega"></div>
+    <div class="notifs-cab"><b>Notificações</b></div>
+    ${S.notifs.length ? S.notifs.map(n => {
+      const [txt, ...resto] = n.texto.split("\n\n");
+      return `<div class="notif ${n.id > lidaAte ? "nova" : ""}">${foto(n.foto, n.jogador || "?")}
+        <div><div class="txt">${textoNotif(txt)}</div>${resto.length ? `<div class="jogo-n">${textoNotif(semCores(resto.join("\n")))}</div>` : ""}
+        <div class="hora">${quandoFoi(n.ts)}</div></div></div>`;
+    }).join("") : `<div class="vazio" style="margin:30px 10px">Ainda não há notificações.<br>Aparecem aqui quando um jogador que segues marca, leva falta ou tem uma stat anulada.</div>`}`;
+}
+
+document.getElementById("sino").onclick = () => {
+  vibra();
+  S.folha = { notifs: true, lidaAte: S.visto };
+  S.visto = S.notifs.length ? S.notifs[0].id : S.visto; guardar("notif_visto", S.visto); marcarNaoLidas();
+  document.getElementById("fundo").classList.remove("esconder");
+  const folha = document.getElementById("folha"); folha.classList.remove("esconder");
+  requestAnimationFrame(() => { document.getElementById("fundo").classList.add("aberto"); folha.classList.add("aberto"); });
+  if (tg) tg.BackButton.show();
+  desenharNotifs(); folha.scrollTop = 0;
+};
 
 /* ---------- folha do jogador: estatística, over/under, linha, análise, seguir ---------- */
 function abrirFolha(j) {
@@ -544,12 +724,12 @@ async function seguir() {
 /* ---------- arranque ---------- */
 (async () => {
   const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
-  if (u) document.getElementById("saudacao").textContent = "Olá, " + u.first_name;
   try { S.stats = (await api("/api/config")).stats; } catch (e) {
     ecra.innerHTML = `<div class="vazio">${esc(e.message)}</div>`; return;
   }
   api("/api/lista").then(l => { S.lista = l; contar(); }).catch(() => {});
   verJogos();
+  verNotifs();
 })();
 </script>
 </body>

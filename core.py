@@ -244,6 +244,14 @@ def com_marcador(linhas: list[str], game: dict) -> str:
     return "\n".join(linhas) + "\n\n" + marcador(game)
 
 
+class Alerta(tuple):
+    """(chat_id, texto), com o nome e o id ESPN do jogador para as notificações da Mini App."""
+    def __new__(cls, msg, jogador="", pid=None):
+        a = super().__new__(cls, msg)
+        a.jogador, a.pid = jogador, pid
+        return a
+
+
 @dataclass
 class Tracker:
     ultimo: dict = field(default_factory=dict)   # (sub_id, game_id) -> valor
@@ -308,117 +316,122 @@ class Tracker:
         final = game.get("gameStatus") == 3
         msgs = []
         for s in subs:
-            achados = encontrar(jogadores, s.jogador)
-            if not achados:
-                continue
-            chave = (s.id, gid)
-            if len(achados) > 1:
-                if chave not in self.avisados:
-                    self.avisados.add(chave)
-                    nomes = ", ".join(nome_completo(p) for p in achados)
-                    msgs.append((s.chat_id, f"❓ «{html.escape(s.jogador)}» corresponde a vários jogadores neste jogo ({html.escape(nomes)}). Remove e segue com o nome completo."))
-                continue
-            p = achados[0]
-            st = p.get("statistics", {})
-            valor = valor_de(s.stat, st)
-            fl = self.flags.setdefault(chave, set())
-            nome = html.escape(nome_completo(p))
-            info = STATS[s.stat]
-
-            if chave not in self.ultimo:
-                # Primeira leitura (início do jogo ou bot reiniciado): regista sem alertas de estatística.
-                self.ultimo[chave] = valor
-                if final:
-                    # Jogo já acabado na primeira leitura (bot reiniciado ou seguido depois do fim): sem mensagens.
-                    fl.add("final")
-                elif p.get("status") == "INACTIVE":
-                    fl.add("inativo")
-                    motivo = p.get("notPlayingDescription") or p.get("notPlayingReason") or ""
-                    motivo = motivo.replace("INACTIVE_", "").replace("_", " ").strip().lower()
-                    msgs.append((s.chat_id, f"🔴 <b>{nome}</b> não está a jogar este jogo{f' ({html.escape(motivo)})' if motivo else ''}.\n\n{marcador(game)}"))
-                elif game.get("gameStatus") == 2 and (game.get("period") or 0) <= 1 and \
-                        int(game["homeTeam"].get("score", 0) or 0) + int(game["awayTeam"].get("score", 0) or 0) < 12:
-                    msgs.append((s.chat_id, f"▶️ Começou o jogo de <b>{nome}</b> ({info['nome']}{f', {descr_linha(s)}' if s.linha is not None else ''})\n\n{marcador(game)}"))
-                self._flags_dd(s, st, fl)
-                if s.linha is not None:
-                    falta = alvo(s.linha) - valor
-                    if falta <= 0:
-                        fl.update({"perto", "batida"})
-                    elif falta <= s.margem():
-                        fl.add("perto")
-            elif info.get("dd"):
-                anterior = self.ultimo[chave]
-                self.ultimo[chave] = valor
-                if valor < anterior:
-                    perdeu = "batida" in fl
-                    fl.discard("batida")
-                    msgs.append((s.chat_id, f"↩️ <b>ANULADO</b> — correção nas stats de <b>{nome}</b>: "
-                                            f"{valor}/{info['dd']} categorias para o {info['nome']}"
-                                            f"{' (deixou de ter)' if perdeu else ''}\n{resumo_dd(st)}\n\n{marcador(game)}"))
-                texto = self._dd(s, st, anterior, valor, fl, nome, game)
-                if texto:
-                    msgs.append((s.chat_id, texto))
-            else:
-                anterior = self.ultimo[chave]
-                self.ultimo[chave] = valor
-                if valor > anterior:
-                    linhas = [f"🏀 <b>{nome}</b> +{valor - anterior} {info['nome']} → <b>{valor}</b>"]
-                    if s.linha is not None:
-                        falta = alvo(s.linha) - valor
-                        if falta <= 0 and "batida" not in fl:
-                            fl.update({"batida", "perto"})
-                            if s.under:
-                                linhas.insert(0, f"❌ <b>UNDER PERDIDO</b> — passou de {s.linha:g} {info['nome']}")
-                            else:
-                                linhas.insert(0, f"✅ <b>LINHA BATIDA</b> — mais de {s.linha:g} {info['nome']}")
-                        elif 0 < falta <= s.margem() and "perto" not in fl:
-                            fl.add("perto")
-                            if s.under:
-                                linhas.insert(0, f"⚠️ <b>CUIDADO COM O UNDER</b> — {situacao_linha(s, valor)}")
-                            else:
-                                linhas.insert(0, f"⚠️ <b>PERTO DA LINHA</b> — falta{'m' if falta > 1 else ''} {falta}")
-                        linhas.append(f"{'Under' if s.under else 'Over'} {s.linha:g} · {situacao_linha(s, valor)}")
-                    msgs.append((s.chat_id, com_marcador(linhas, game)))
-                elif valor < anterior:
-                    # Correção de estatística (cesto ou ressalto retirado, por exemplo).
-                    linhas = [f"↩️ <b>ANULADO</b> — <b>{nome}</b> {anterior - valor} {info['nome']} retirado{'s' if anterior - valor > 1 else ''}",
-                              f"Agora tem <b>{valor}</b> {info['nome']}"]
-                    if s.linha is not None:
-                        falta = alvo(s.linha) - valor
-                        if falta > 0:
-                            if "batida" in fl:
-                                linhas.append("✅ O under volta a estar vivo" if s.under
-                                              else f"⚠️ A linha {s.linha:g} deixou de estar batida")
-                            fl.discard("batida")
-                            if falta > s.margem():
-                                fl.discard("perto")
-                        linhas.append(f"{'Under' if s.under else 'Over'} {s.linha:g} · {situacao_linha(s, valor)}")
-                    msgs.append((s.chat_id, com_marcador(linhas, game)))
-
-            chave_f = (s.chat_id, nome, gid)
-            faltas = int(st.get("fouls", 0) or 0)
-            vistas = self.faltas.get(chave_f)
-            self.faltas[chave_f] = max(faltas, vistas or 0)
-            if vistas is not None and faltas > vistas and not final and "inativo" not in fl:
-                if faltas >= 6:
-                    msgs.append((s.chat_id, f"🟥 <b>{nome}</b> fez a 6.ª falta e <b>está fora do jogo</b> (foul out)\n\n{marcador(game)}"))
-                elif faltas >= 4:
-                    msgs.append((s.chat_id, f"🟨 <b>{nome}</b> tem <b>{faltas} faltas</b> — à 6.ª sai do jogo"
-                                            f"{' (falta só 1!)' if faltas == 5 else ''}\n\n{marcador(game)}"))
-
-            if final and "final" not in fl:
-                fl.add("final")
-                self.terminados.append(s.id)
-                if "inativo" in fl:
+            n0, p = len(msgs), None
+            try:
+                achados = encontrar(jogadores, s.jogador)
+                if not achados:
                     continue
-                if info.get("dd"):
-                    ok = valor >= info["dd"]
-                    msgs.append((s.chat_id, f"🏁 <b>{nome}</b> acabou com {resumo_dd(st)} — {info['nome']} {'✅' if ok else '❌'}\n\n{marcador(game)}"))
-                elif s.linha is not None:
-                    ok = (valor < alvo(s.linha)) if s.under else (valor >= alvo(s.linha))
-                    msgs.append((s.chat_id, f"🏁 <b>{nome}</b> acabou com <b>{valor}</b> {info['nome']} — {descr_linha(s)} {'✅' if ok else '❌'}\n\n{marcador(game)}"))
+                chave = (s.id, gid)
+                if len(achados) > 1:
+                    if chave not in self.avisados:
+                        self.avisados.add(chave)
+                        nomes = ", ".join(nome_completo(p) for p in achados)
+                        msgs.append((s.chat_id, f"❓ «{html.escape(s.jogador)}» corresponde a vários jogadores neste jogo ({html.escape(nomes)}). Remove e segue com o nome completo."))
+                    continue
+                p = achados[0]
+                st = p.get("statistics", {})
+                valor = valor_de(s.stat, st)
+                fl = self.flags.setdefault(chave, set())
+                nome = html.escape(nome_completo(p))
+                info = STATS[s.stat]
+
+                if chave not in self.ultimo:
+                    # Primeira leitura (início do jogo ou bot reiniciado): regista sem alertas de estatística.
+                    self.ultimo[chave] = valor
+                    if final:
+                        # Jogo já acabado na primeira leitura (bot reiniciado ou seguido depois do fim): sem mensagens.
+                        fl.add("final")
+                    elif p.get("status") == "INACTIVE":
+                        fl.add("inativo")
+                        motivo = p.get("notPlayingDescription") or p.get("notPlayingReason") or ""
+                        motivo = motivo.replace("INACTIVE_", "").replace("_", " ").strip().lower()
+                        msgs.append((s.chat_id, f"🔴 <b>{nome}</b> não está a jogar este jogo{f' ({html.escape(motivo)})' if motivo else ''}.\n\n{marcador(game)}"))
+                    elif game.get("gameStatus") == 2 and (game.get("period") or 0) <= 1 and \
+                            int(game["homeTeam"].get("score", 0) or 0) + int(game["awayTeam"].get("score", 0) or 0) < 12:
+                        msgs.append((s.chat_id, f"▶️ Começou o jogo de <b>{nome}</b> ({info['nome']}{f', {descr_linha(s)}' if s.linha is not None else ''})\n\n{marcador(game)}"))
+                    self._flags_dd(s, st, fl)
+                    if s.linha is not None:
+                        falta = alvo(s.linha) - valor
+                        if falta <= 0:
+                            fl.update({"perto", "batida"})
+                        elif falta <= s.margem():
+                            fl.add("perto")
+                elif info.get("dd"):
+                    anterior = self.ultimo[chave]
+                    self.ultimo[chave] = valor
+                    if valor < anterior:
+                        perdeu = "batida" in fl
+                        fl.discard("batida")
+                        msgs.append((s.chat_id, f"↩️ <b>ANULADO</b> — correção nas stats de <b>{nome}</b>: "
+                                                f"{valor}/{info['dd']} categorias para o {info['nome']}"
+                                                f"{' (deixou de ter)' if perdeu else ''}\n{resumo_dd(st)}\n\n{marcador(game)}"))
+                    texto = self._dd(s, st, anterior, valor, fl, nome, game)
+                    if texto:
+                        msgs.append((s.chat_id, texto))
                 else:
-                    msgs.append((s.chat_id, f"🏁 <b>{nome}</b> acabou com <b>{valor}</b> {info['nome']}\n\n{marcador(game)}"))
+                    anterior = self.ultimo[chave]
+                    self.ultimo[chave] = valor
+                    if valor > anterior:
+                        linhas = [f"🏀 <b>{nome}</b> +{valor - anterior} {info['nome']} → <b>{valor}</b>"]
+                        if s.linha is not None:
+                            falta = alvo(s.linha) - valor
+                            if falta <= 0 and "batida" not in fl:
+                                fl.update({"batida", "perto"})
+                                if s.under:
+                                    linhas.insert(0, f"❌ <b>UNDER PERDIDO</b> — passou de {s.linha:g} {info['nome']}")
+                                else:
+                                    linhas.insert(0, f"✅ <b>LINHA BATIDA</b> — mais de {s.linha:g} {info['nome']}")
+                            elif 0 < falta <= s.margem() and "perto" not in fl:
+                                fl.add("perto")
+                                if s.under:
+                                    linhas.insert(0, f"⚠️ <b>CUIDADO COM O UNDER</b> — {situacao_linha(s, valor)}")
+                                else:
+                                    linhas.insert(0, f"⚠️ <b>PERTO DA LINHA</b> — falta{'m' if falta > 1 else ''} {falta}")
+                            linhas.append(f"{'Under' if s.under else 'Over'} {s.linha:g} · {situacao_linha(s, valor)}")
+                        msgs.append((s.chat_id, com_marcador(linhas, game)))
+                    elif valor < anterior:
+                        # Correção de estatística (cesto ou ressalto retirado, por exemplo).
+                        linhas = [f"↩️ <b>ANULADO</b> — <b>{nome}</b> {anterior - valor} {info['nome']} retirado{'s' if anterior - valor > 1 else ''}",
+                                  f"Agora tem <b>{valor}</b> {info['nome']}"]
+                        if s.linha is not None:
+                            falta = alvo(s.linha) - valor
+                            if falta > 0:
+                                if "batida" in fl:
+                                    linhas.append("✅ O under volta a estar vivo" if s.under
+                                                  else f"⚠️ A linha {s.linha:g} deixou de estar batida")
+                                fl.discard("batida")
+                                if falta > s.margem():
+                                    fl.discard("perto")
+                            linhas.append(f"{'Under' if s.under else 'Over'} {s.linha:g} · {situacao_linha(s, valor)}")
+                        msgs.append((s.chat_id, com_marcador(linhas, game)))
+
+                chave_f = (s.chat_id, nome, gid)
+                faltas = int(st.get("fouls", 0) or 0)
+                vistas = self.faltas.get(chave_f)
+                self.faltas[chave_f] = max(faltas, vistas or 0)
+                if vistas is not None and faltas > vistas and not final and "inativo" not in fl:
+                    if faltas >= 6:
+                        msgs.append((s.chat_id, f"🟥 <b>{nome}</b> fez a 6.ª falta e <b>está fora do jogo</b> (foul out)\n\n{marcador(game)}"))
+                    elif faltas >= 4:
+                        msgs.append((s.chat_id, f"🟨 <b>{nome}</b> tem <b>{faltas} faltas</b> — à 6.ª sai do jogo"
+                                                f"{' (falta só 1!)' if faltas == 5 else ''}\n\n{marcador(game)}"))
+
+                if final and "final" not in fl:
+                    fl.add("final")
+                    self.terminados.append(s.id)
+                    if "inativo" in fl:
+                        continue
+                    if info.get("dd"):
+                        ok = valor >= info["dd"]
+                        msgs.append((s.chat_id, f"🏁 <b>{nome}</b> acabou com {resumo_dd(st)} — {info['nome']} {'✅' if ok else '❌'}\n\n{marcador(game)}"))
+                    elif s.linha is not None:
+                        ok = (valor < alvo(s.linha)) if s.under else (valor >= alvo(s.linha))
+                        msgs.append((s.chat_id, f"🏁 <b>{nome}</b> acabou com <b>{valor}</b> {info['nome']} — {descr_linha(s)} {'✅' if ok else '❌'}\n\n{marcador(game)}"))
+                    else:
+                        msgs.append((s.chat_id, f"🏁 <b>{nome}</b> acabou com <b>{valor}</b> {info['nome']}\n\n{marcador(game)}"))
+            finally:
+                for k in range(n0, len(msgs)):   # cada alerta leva o jogador (para as notificações da app)
+                    msgs[k] = Alerta(msgs[k], s.jogador if p is None else nome_completo(p), (p or {}).get("id"))
         return msgs
 
 

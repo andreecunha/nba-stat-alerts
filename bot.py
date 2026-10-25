@@ -43,9 +43,9 @@ def _ler_token() -> str:
     return token
 
 
-VERSAO = "2026-10-25 20:30 (mini app)"
+VERSAO = "2026-10-25 21:10 (números na barra)"
 TOKEN = _ler_token()
-INTERVALO = int(os.getenv("INTERVALO", "20"))  # segundos entre leituras
+INTERVALO = int(os.getenv("INTERVALO", "10"))  # segundos entre leituras
 PASTA_BOT = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.getenv("DB_PATH", os.path.join(PASTA_BOT, "subs.db"))
 REMOVER_APOS = int(os.getenv("REMOVER_APOS", "10"))
@@ -178,7 +178,30 @@ def db():
             con.execute(f"ALTER TABLE subs ADD COLUMN {coluna}")
         except sqlite3.OperationalError:
             pass  # a coluna já existe
+    con.execute("""CREATE TABLE IF NOT EXISTS notif (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, ts REAL, jogador TEXT, pid TEXT, texto TEXT)""")
     return con
+
+
+NOTIF_DIAS = 2   # as notificações da app ficam guardadas 2 dias
+
+
+def guardar_notif(alertas: list):
+    """Guarda os alertas enviados no chat para aparecerem no sino da Mini App."""
+    if not alertas:
+        return
+    agora = time.time()
+    with db() as con:
+        con.executemany("INSERT INTO notif (chat_id, ts, jogador, pid, texto) VALUES (?, ?, ?, ?, ?)",
+                        [(a[0], agora, getattr(a, "jogador", ""), getattr(a, "pid", None), a[1]) for a in alertas])
+        con.execute("DELETE FROM notif WHERE ts < ?", (agora - NOTIF_DIAS * 86400,))
+
+
+def notificacoes(chat_id: int, limite: int = 80) -> list[dict]:
+    with db() as con:
+        linhas = con.execute("SELECT id, ts, jogador, pid, texto FROM notif WHERE chat_id = ? "
+                             "ORDER BY id DESC LIMIT ?", (chat_id, limite)).fetchall()
+    return [{"id": i, "ts": ts, "jogador": j, "pid": pid, "texto": t} for i, ts, j, pid, t in linhas]
 
 
 def fins(chat_id: int) -> dict[int, float]:
@@ -1242,7 +1265,12 @@ async def ciclo(app: Application):
                     if g["gameStatus"] == 1 or gid in terminados:
                         continue
                     box = await dados.boxscore(gid)
-                    for chat_id, texto in tracker.processar(box, subs):
+                    alertas = tracker.processar(box, subs)
+                    try:
+                        guardar_notif(alertas)
+                    except Exception as e:
+                        log.warning("notificações da app: %s", e)
+                    for chat_id, texto in alertas:
                         try:
                             await app.bot.send_message(chat_id, texto, parse_mode="HTML")
                         except Exception as e:
@@ -1287,6 +1315,7 @@ async def iniciar_web(app: Application):
         "subs_de": subs_de, "estado": estado, "fins": fins, "ctx": lambda: SimpleNamespace(application=app),
         "criar_sub": criar_sub, "remover": remover_sub, "media_recente": media_recente,
         "linha_inicial": linha_inicial, "dados_analise": dados_analise,
+        "valor_de": valor_de, "alvo": alvo, "resumo_dd": resumo_dd, "notificacoes": notificacoes,
         "enviar_confirmacao": lambda chat_id, texto, sub: enviar_confirmacao(app, chat_id, texto, sub),
     }
     runner = _web.AppRunner(webapp.criar_app(app, api), access_log=None)
