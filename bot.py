@@ -40,7 +40,7 @@ def _ler_token() -> str:
     return token
 
 
-VERSAO = "2026-10-25 19:40 (sem apostas repetidas)"
+VERSAO = "2026-10-25 19:50 (linha só +1/-1)"
 TOKEN = _ler_token()
 INTERVALO = int(os.getenv("INTERVALO", "20"))  # segundos entre leituras
 PASTA_BOT = os.path.dirname(os.path.abspath(__file__))
@@ -345,14 +345,18 @@ AJUDA = (
 TECLADO_AJUDA = InlineKeyboardMarkup([[InlineKeyboardButton("📖 Todas as estatísticas", callback_data="menu:pedidos")]])
 
 
+TECLADO_INICIO = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🏀 Ver jogos de hoje", callback_data="menu:jogos"),
+     InlineKeyboardButton("🔎 Procurar jogador", callback_data="menu:procurar")],
+    [InlineKeyboardButton("Agora não", callback_data="fechar")]])
+PERGUNTA_INICIO = "O que queres fazer? Escolher pelo jogo ou procurar um jogador pelo nome?"
+
+
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_html(
         "Olá! 👋 Eu aviso-te no telemóvel quando os teus jogadores da NBA marcam, ressaltam, assistem…\n\n"
         "Usa os botões aqui em baixo 👇 — não precisas de escrever comandos.", reply_markup=MENU)
-    await update.message.reply_html(
-        "Queres ver os jogos de hoje?",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏀 Sim, ver jogos", callback_data="menu:jogos"),
-                                            InlineKeyboardButton("Agora não", callback_data="fechar")]]))
+    await update.message.reply_html(PERGUNTA_INICIO, reply_markup=TECLADO_INICIO)
 
 
 async def cmd_ajuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -378,6 +382,13 @@ async def menu_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await responder(q)
     if q.data == "menu:pedidos":
         await ctx.bot.send_message(q.message.chat.id, texto_pedidos(), parse_mode="HTML")
+        return
+    if q.data == "menu:procurar":
+        try:
+            await q.message.delete()
+        except Exception:
+            pass
+        await pedir_nome(ctx, q.message.chat.id)
         return
     if q.data == "menu:jogos":
         try:
@@ -764,11 +775,8 @@ def texto_seletor(pend: dict) -> str:
 
 
 def teclado_seletor(pend: dict) -> InlineKeyboardMarkup:
-    if pend["stat"] in GRANDES:
-        passos = [["-5", "-1", "-0.5"], ["+0.5", "+1", "+5"]]
-    else:
-        passos = [["-1", "-0.5", "+0.5", "+1"]]
-    linhas = [[InlineKeyboardButton(p.replace("-", "−"), callback_data=f"ln:{p}") for p in fila] for fila in passos]
+    # Só ±1: como começa sempre em x.5, a linha fica sempre em x.5 (23.5, 19.5…)
+    linhas = [[InlineKeyboardButton("−1", callback_data="ln:-1"), InlineKeyboardButton("+1", callback_data="ln:+1")]]
     linhas.append([InlineKeyboardButton(f"✅ Confirmar {pend['linha_tmp']:g}", callback_data="ln:ok")])
     linhas.append([CANCELAR])
     return InlineKeyboardMarkup(linhas)
@@ -867,7 +875,6 @@ async def fazer_analise(dados: Dados, s: Sub):
     buf = io.BytesIO()
     await asyncio.to_thread(img.save, buf, "PNG")
     legenda = analise.resumo_texto(s.stat, s.linha, s.under, ultimos, contra, adversario)
-    legenda += "\n\nℹ️ É o que aconteceu, não uma previsão. 5 jogos é uma amostra pequena."
     return buf.getvalue(), legenda
 
 
@@ -949,6 +956,14 @@ async def seguir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, args: list[str]
     await iniciar_fila(ctx, update.effective_chat.id, [valor], stat, linha, lado, aviso)
 
 
+async def pedir_nome(ctx, chat_id: int):
+    ctx.application.bot_data.setdefault("pendente", {}).pop(chat_id, None)
+    ctx.application.bot_data.setdefault("espera_nome", set()).add(chat_id)
+    await ctx.bot.send_message(chat_id, "✍️ Escreve o nome do jogador (ex.: <code>lebron</code>, <code>curry</code>, "
+                                        "<code>jokic</code>)", parse_mode="HTML",
+                               reply_markup=InlineKeyboardMarkup([[CANCELAR]]))
+
+
 async def nome_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Escolheu um dos jogadores com o mesmo nome."""
     q = update.callback_query
@@ -1012,10 +1027,7 @@ async def texto_livre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await cmd_limpar(update, ctx)
         return
     if texto == BOTAO_PROCURAR:
-        ctx.application.bot_data.setdefault("pendente", {}).pop(chat_id, None)
-        ctx.application.bot_data.setdefault("espera_nome", set()).add(chat_id)
-        await update.message.reply_html("✍️ Escreve o nome do jogador (ex.: <code>lebron</code>, <code>curry</code>, "
-                                        "<code>jokic</code>)", reply_markup=InlineKeyboardMarkup([[CANCELAR]]))
+        await pedir_nome(ctx, chat_id)
         return
     ctx.application.bot_data.setdefault("espera_nome", set()).discard(chat_id)
     pend = pendente(ctx, chat_id)
@@ -1187,9 +1199,7 @@ async def cmd_limpar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     n = len(subs_de(chat_id))
     lista = f" A tua lista ({n} aposta{'s' if n != 1 else ''}) continua guardada." if n else ""
     await ctx.bot.send_message(chat_id, f"🧹 Conversa limpa.{lista}", reply_markup=MENU)
-    await ctx.bot.send_message(chat_id, "Queres ver os jogos de hoje?", reply_markup=InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🏀 Sim, ver jogos", callback_data="menu:jogos"),
-          InlineKeyboardButton("Agora não", callback_data="fechar")]]))
+    await ctx.bot.send_message(chat_id, PERGUNTA_INICIO, reply_markup=TECLADO_INICIO)
 
 
 # ---------- ciclo de leitura ----------
