@@ -217,7 +217,8 @@ assert em_campo_espn({"boxscore": {"players": [{"team": {"abbreviation": "AAA"},
 print("Em campo OK ✅")
 
 # --- avisos de entrar / sair de campo ---
-tc = Tracker()
+relogio_t = [0.0]
+tc = Tracker(relogio=lambda: relogio_t[0])
 sc = [Sub(80, 100, "lebron", "pts", 24.5), Sub(81, 100, "lebron", "reb")]   # duas apostas no mesmo jogador
 def com_campo(b, v):
     for t_ in ("homeTeam", "awayTeam"):
@@ -227,10 +228,19 @@ def com_campo(b, v):
 import copy
 tc.processar(com_campo(copy.deepcopy(seq[1]), True), sc)
 m = tc.processar(com_campo(copy.deepcopy(seq[1]), True), sc); assert not any("campo" in x or "banco" in x for _, x in m)
-m = tc.processar(com_campo(copy.deepcopy(seq[1]), False), sc)
-banco = [a for a in m if "foi para o banco" in a[1]]
+def ler(v, segundos=10):
+    relogio_t[0] += segundos
+    return tc.processar(com_campo(copy.deepcopy(seq[1]), v), sc)
+# um soluço (volta atrás 10 s depois) não avisa
+m = ler(False) + ler(True)
+assert not any("banco" in x or "entrou" in x for _, x in m), m
+# no banco: 10 s ainda não chega, aos 20 s (≥ 15) avisa uma vez
+m = ler(False); assert not any("banco" in x for _, x in m)
+m = ler(False)
+m2 = ler(False)
+banco = [a for a in m + m2 if "foi para o banco" in a[1]]
 assert len(banco) == 1 and banco[0].silencioso and "LeBron" in banco[0][1], m
-m = tc.processar(com_campo(copy.deepcopy(seq[1]), True), sc)
+m = ler(True, 5) + ler(True, 5) + ler(True, 5) + ler(True, 5)
 assert sum("entrou em campo" in x for _, x in m) == 1
 print("Entrar / sair OK ✅")
 # --- intervalo ---
@@ -244,4 +254,24 @@ ht = box_espn({"header": {"competitions": [{"status": {"period": 2, "displayCloc
                                             "competitors": []}]}}, "9")
 assert ht["game"]["intervalo"] and relogio(ht["game"]) == "HALFTIME"
 print("Intervalo OK ✅")
+
+# --- início do jogo: a ESPN marca todos como didNotPlay até entrarem ---
+def sumario(periodo, estado, reason=""):
+    a = lambda i, n, r="": {"athlete": {"id": str(i), "displayName": n}, "didNotPlay": True, "reason": r, "stats": []}
+    return {"header": {"competitions": [{"status": {"period": periodo, "displayClock": "11:40", "type": {"state": estado}},
+                                         "competitors": [{"homeAway": "home", "score": "0", "team": {"abbreviation": "NY"}},
+                                                         {"homeAway": "away", "score": "2", "team": {"abbreviation": "ORL"}}]}]},
+            "boxscore": {"players": [{"team": {"abbreviation": "ORL"}, "statistics": [{"labels": [], "athletes": [
+                a(1, "Paolo Banchero"), a(2, "Franz Wagner", reason)]}]}]}}
+cedo = box_espn(sumario(1, "in"), "7")["game"]["awayTeam"]["players"]
+assert [p["status"] for p in cedo] == ["ACTIVE", "ACTIVE"], cedo
+assert box_espn(sumario(1, "in", "DNP-INJURY"), "7")["game"]["awayTeam"]["players"][1]["status"] == "INACTIVE"
+assert box_espn(sumario(3, "in"), "7")["game"]["awayTeam"]["players"][0]["status"] == "INACTIVE"
+ti = Tracker(); so = [Sub(90, 100, "banchero", "pts", 24.5)]
+assert not any("não está a jogar" in x for _, x in ti.processar(box_espn(sumario(1, "in"), "7"), so))
+assert not any("não está a jogar" in x for _, x in ti.processar(box_espn(sumario(2, "in"), "7"), so))
+m = ti.processar(box_espn(sumario(3, "in"), "7"), so)
+assert sum("não está a jogar" in x for _, x in m) == 1, m
+assert not any("não está a jogar" in x for _, x in ti.processar(box_espn(sumario(3, "in"), "7"), so))   # só uma vez
+print("Início do jogo OK ✅")
 print("Todos os testes passaram ✅")

@@ -122,8 +122,10 @@ def criar_app(tg_app, api: dict) -> web.Application:
                 plantel = sorted((p for p in todos if p["team"] == tri), key=lambda p: (bool(p.get("lesao")), p["name"]))
                 equipas.append({**equipa(game[lado], lg), "jogadores": [
                     {"nome": p["name"], "foto": FOTO.format(p["id"]) if p.get("id") else "", "pos": p.get("pos", ""),
+                     "num": p.get("jersey", ""),
                      "lesao": p.get("lesao", ""), "stats": None, "inativo": False} for p in plantel]})
         else:
+            num_de = await camisolas()
             for lado in ("awayTeam", "homeTeam"):
                 t = game[lado]
                 jogadores = []
@@ -132,13 +134,16 @@ def criar_app(tg_app, api: dict) -> web.Application:
                     st = p["statistics"]
                     jogadores.append({
                         "nome": api["nome_completo"](p), "foto": FOTO.format(p["id"]) if p.get("id") else "",
+                        "num": p.get("jersey") or num_de.get(str(p.get("id", "")), ""),
                         "pos": "", "lesao": "", "inativo": p.get("status") == "INACTIVE",
                         "stats": {"pts": st.get("points", 0), "reb": st.get("reboundsTotal", 0),
                                   "ast": st.get("assists", 0), "3pt": st.get("threePointersMade", 0),
                                   "stl": st.get("steals", 0), "blk": st.get("blocks", 0),
                                   "min": st.get("minutes", 0), "pf": st.get("fouls", 0)},
                         "campo": p.get("emCampo") if game.get("gameStatus") == 2 else None})
-                equipas.append({**equipa(t, lg), "jogadores": jogadores})
+                # Jogo a decorrer mas a ESPN ainda não tem pelo menos 5 jogadores desta equipa com jogo: dados por chegar.
+                sem_dados = game.get("gameStatus") == 2 and sum(1 for p in t.get("players", []) if p.get("jogou")) < 5
+                equipas.append({**equipa(t, lg), "jogadores": jogadores, "sem_dados": sem_dados})
         return web.json_response({"id": gid, "estado": game.get("gameStatus"),
                                   "relogio": api["relogio"](game) if game.get("gameStatus") != 1 else "",
                                   "equipas": equipas})
@@ -154,6 +159,7 @@ def criar_app(tg_app, api: dict) -> web.Application:
             return web.json_response({"erro": "Não consegui procurar agora."}, status=502)
         return web.json_response([{"nome": p["name"], "team": p["team"], "logo": lg.get(p["team"], ""),
                                    "foto": FOTO.format(p["id"]) if p.get("id") else "", "pos": p.get("pos", ""),
+                                   "num": p.get("jersey", ""),
                                    "lesao": p.get("lesao", "")} for p in achados])
 
     async def ao_vivo(nomes: set) -> dict:
@@ -200,6 +206,7 @@ def criar_app(tg_app, api: dict) -> web.Application:
             p = achados[0] if len(achados) == 1 else {}
             item = {"id": s.id, "jogador": s.jogador, "stat": s.stat, "stat_nome": STATS[s.stat]["nome"],
                     "linha": s.linha, "lado": s.lado, "foto": FOTO.format(p["id"]) if p.get("id") else "",
+                    "num": p.get("jersey", ""),
                     "team": p.get("team", ""), "logo": lg.get(p.get("team", ""), ""), "fase": "pre", "estado": "",
                     "mudo": s.mudo}
             if s.jogador in vivos:
@@ -278,10 +285,19 @@ def criar_app(tg_app, api: dict) -> web.Application:
         api["apagar_notif"](request["chat_id"], int(nid) if nid else None)
         return web.json_response({"ok": True})
 
+    async def camisolas() -> dict:
+        """id ESPN do jogador -> número da camisola (dos plantéis, que ficam em cache)."""
+        try:
+            return {str(p.get("id")): p.get("jersey", "") for p in await dados().jogadores() if p.get("id")}
+        except Exception:
+            return {}
+
     async def notificacoes(request):
         lista = api["notificacoes"](request["chat_id"])
+        num_de = await camisolas()
         for n in lista:
             n["foto"] = FOTO.format(n["pid"]) if n.get("pid") else ""
+            n["num"] = num_de.get(str(n.get("pid") or ""), "")
             n.pop("pid", None)
         return web.json_response(lista)
 

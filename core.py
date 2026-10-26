@@ -3,6 +3,7 @@
 Não depende do Telegram nem da rede, para poder ser testada com jogos simulados.
 """
 import html
+import time
 import math
 import re
 import unicodedata
@@ -299,7 +300,9 @@ class Tracker:
     avisados: set = field(default_factory=set)   # (sub_id, game_id) já avisados de nome ambíguo
     terminados: list = field(default_factory=list)  # sub_ids cujo jogo acabou (o bot remove-os mais tarde)
     faltas: dict = field(default_factory=dict)      # (chat_id, jogador, game_id) -> nº de faltas já visto
-    campo: dict = field(default_factory=dict)       # (chat_id, jogador, game_id) -> em campo (True) / banco (False)
+    campo: dict = field(default_factory=dict)       # (chat_id, jogador, game_id) -> em campo (True) / banco (False), já confirmado
+    campo_novo: dict = field(default_factory=dict)  # (chat_id, jogador, game_id) -> (estado novo, quando apareceu)
+    relogio: object = time.monotonic                # hora atual (substituível nos testes)
     comp: dict = field(default_factory=dict)        # (sub_id, game_id) -> estatísticas da última leitura
 
     def semear(self, s: Sub, gid: str, st: dict):
@@ -384,15 +387,7 @@ class Tracker:
                     if final:
                         # Jogo já acabado na primeira leitura (bot reiniciado ou seguido depois do fim): sem mensagens.
                         fl.add("final")
-                    elif p.get("status") == "INACTIVE":
-                        fl.add("inativo")
-                        motivo = p.get("notPlayingDescription") or p.get("notPlayingReason") or ""
-                        motivo = motivo.replace("INACTIVE_", "").replace("_", " ").strip().lower()
-                        chave_i = ("inativo", s.chat_id, nome, gid)   # um só aviso por jogador, mesmo com várias apostas
-                        if chave_i not in self.avisados:
-                            self.avisados.add(chave_i)
-                            msgs.append((s.chat_id, f"🔴 <b>{nome}</b> não está a jogar este jogo{f' ({html.escape(motivo)})' if motivo else ''}.\n\n{marcador(game)}"))
-                    elif game.get("gameStatus") == 2 and (game.get("period") or 0) <= 1 and \
+                    elif p.get("status") != "INACTIVE" and game.get("gameStatus") == 2 and (game.get("period") or 0) <= 1 and \
                             int(game["homeTeam"].get("score", 0) or 0) + int(game["awayTeam"].get("score", 0) or 0) < 12:
                         # Junta-se num só aviso por jogo (ver o fim da função).
                         desc = info["nome"] + (f", {descr_linha(s)}" if s.linha is not None else "")
@@ -449,6 +444,18 @@ class Tracker:
                                     fl.discard("perto")
                         msgs.append(Alerta((s.chat_id, texto), curto=texto))
 
+                # Não joga: só quando a ESPN o confirma (ver box_espn), e um só aviso por jogador.
+                if p.get("status") == "INACTIVE" and "inativo" not in fl and "final" not in fl:
+                    fl.add("inativo")
+                    motivo = p.get("notPlayingDescription") or p.get("notPlayingReason") or ""
+                    motivo = motivo.replace("INACTIVE_", "").replace("DNP-", "").replace("_", " ").strip().lower()
+                    chave_i = ("inativo", s.chat_id, nome, gid)
+                    if chave_i not in self.avisados and not s.mudo:
+                        self.avisados.add(chave_i)
+                        msgs.append((s.chat_id, f"🔴 <b>{nome}</b> não está a jogar{f' ({html.escape(motivo)})' if motivo else ''}"))
+                elif p.get("status") != "INACTIVE":
+                    fl.discard("inativo")   # afinal entrou
+
                 if not info.get("dd"):
                     self.comp[chave] = {c: int(st.get(c, 0) or 0) for c in info["campos"]}
                 chave_f = (s.chat_id, nome, gid)
@@ -456,8 +463,23 @@ class Tracker:
                 agora_campo = p.get("emCampo")
                 if not s.mudo and agora_campo is not None and game.get("gameStatus") == 2 and "inativo" not in fl:
                     antes_campo = self.campo.get(chave_f)
-                    self.campo[chave_f] = agora_campo
-                    if antes_campo is not None and agora_campo != antes_campo:
+                    mudou = False
+                    if antes_campo is None:
+                        self.campo[chave_f] = agora_campo
+                    elif agora_campo == antes_campo:
+                        self.campo_novo.pop(chave_f, None)   # foi só um soluço dos dados
+                    else:
+                        # Os dados da ESPN às vezes oscilam por instantes: só conta se se mantiver CONFIRMAR_CAMPO segundos.
+                        agora_t = self.relogio()
+                        estado_n, desde = self.campo_novo.get(chave_f, (None, agora_t))
+                        if estado_n != agora_campo:
+                            desde = agora_t
+                        self.campo_novo[chave_f] = (agora_campo, desde)
+                        if agora_t - desde >= CONFIRMAR_CAMPO:
+                            self.campo[chave_f] = agora_campo
+                            self.campo_novo.pop(chave_f, None)
+                            mudou = True
+                    if mudou:
                         texto = (f"🟢 <b>{nome}</b> entrou em campo" if agora_campo
                                  else f"🪑 <b>{nome}</b> foi para o banco")
                         msgs.append(Alerta((s.chat_id, texto), silencioso=True))
@@ -631,6 +653,8 @@ def _e_intervalo(st: dict) -> bool:
     return tipo.get("name") == "STATUS_HALFTIME" or str(tipo.get("description", "")).lower() == "halftime"
 
 
+CONFIRMAR_CAMPO = 15   # segundos que a mudança tem de durar antes de avisar que entrou / saiu de campo
+
 _ENTRA = re.compile(r"^\s*(.+?) enters the game for (.+?)\.?\s*$", re.I)
 
 
@@ -697,7 +721,10 @@ def box_espn(summary: dict, gid: str) -> dict:
     lado_de = {v["teamTricode"]: k for k, v in eq.items()}
     ao_vivo = st.get("type", {}).get("state") == "in"
     no_intervalo = _e_intervalo(st) or (st.get("period") == 2 and _relogio_espn(st.get("displayClock")) == "PT00M00.00S")
-    campo = em_campo_espn(summary) if ao_vivo and not no_intervalo else {}   # no intervalo ninguém está em campo
+    campo = em_campo_espn(summary) if ao_vivo and not no_intervalo else {}
+    # A ESPN marca todos como "didNotPlay" até entrarem em campo. Só se conta como "não joga" se houver
+    # um motivo (lesão, opção do treinador…), ou a partir do 3.º período, ou com o jogo acabado.
+    tarde = st.get("type", {}).get("state") == "post" or (st.get("period") or 0) >= 3   # no intervalo ninguém está em campo
     for bloco in summary.get("boxscore", {}).get("players", []):
         abrev = bloco.get("team", {}).get("abbreviation", "?")
         lado = lado_de.get(ESPN_PARA_NBA.get(abrev, abrev))
@@ -721,8 +748,10 @@ def box_espn(summary: dict, gid: str) -> dict:
                 eq[lado]["players"].append({
                     "id": str(a.get("athlete", {}).get("id", "")),
                     "name": nome, "firstName": partes[0], "familyName": partes[1] if len(partes) > 1 else "",
-                    "status": "INACTIVE" if a.get("didNotPlay") else "ACTIVE",
+                    "status": "INACTIVE" if a.get("didNotPlay") and (a.get("reason") or tarde) else "ACTIVE",
                     "notPlayingReason": a.get("reason", ""), "statistics": stats,
+                    "jogou": not a.get("didNotPlay"),
+                    "jersey": str(a.get("athlete", {}).get("jersey", "") or ""),   # a ESPN já o tem como tendo entrado em campo
                     "emCampo": campo.get(str(a.get("athlete", {}).get("id", "")))})
     return {"game": {"gameId": gid, "gameStatus": ESTADOS_ESPN.get(st.get("type", {}).get("state"), 1),
                      "period": st.get("period", 0), "gameClock": _relogio_espn(st.get("displayClock")),

@@ -132,9 +132,16 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
            border-bottom: 1px solid var(--risca); text-align: left; width: 100%; }
 .jogador:last-child { border-bottom: 0; }
 .foto { width: 48px; height: 48px; border-radius: 50%; background: var(--painel-2); }
-.rosto { position: relative; overflow: hidden; display: grid; place-items: center; }
+.rosto { position: relative; display: grid; place-items: center; }
 .rosto span { font-family: var(--cond); font-weight: 700; font-size: 18px; color: var(--suave); }
-.rosto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.rosto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 50%; }
+/* Número da camisola: etiqueta no canto inferior direito da foto. */
+.camisola { position: absolute; right: -7px; bottom: -4px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 6px;
+            background: var(--texto); color: var(--noite); border: 2px solid var(--painel); box-sizing: content-box;
+            font-family: var(--cond); font-weight: 800; font-size: 12px; font-style: normal; line-height: 16px; text-align: center; }
+.quem .camisola { min-width: 20px; height: 20px; line-height: 20px; font-size: 14px; }
+.mini-f .camisola { min-width: 14px; height: 13px; line-height: 13px; font-size: 10px; padding: 0 2px; border-width: 1.5px; right: -5px; bottom: -3px; border-radius: 5px; }
+.notif .camisola { border-color: var(--noite); }
 .quem .rosto span { font-size: 24px; }
 .nome { font-weight: 600; font-size: 16px; }
 .sub { color: var(--suave); font-size: 14px; margin-top: 2px; }
@@ -166,6 +173,11 @@ h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 1
 .em { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--bate); margin-left: 6px; vertical-align: 2px; }
 .em-leg { white-space: nowrap; margin-left: 6px; }
 .em-leg .em { margin: 0 3px 0 0; }
+
+.espera { margin: 4px 14px; padding: 22px 20px; background: var(--painel); border-radius: var(--raio); text-align: center; }
+.espera .carregar { margin: 0 auto 14px; }
+.espera b { display: block; font-size: 16px; margin-bottom: 6px; }
+.espera p { margin: 0; color: var(--suave); font-size: 14px; line-height: 1.45; }
 
 /* ---------- procurar ---------- */
 .caixa { margin: 4px 14px 6px; position: relative; }
@@ -379,8 +391,9 @@ const erro = (msg, repetir) => {
 };
 const imagem = (src, classe, alt = "") => src ? `<img class="${classe}" src="${esc(src)}" alt="${esc(alt)}" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="${classe}"></div>`;
 const iniciais = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase();
-const foto = (src, nome, classe = "foto") => `<div class="${classe} rosto" aria-hidden="true"><span>${esc(iniciais(nome))}</span>${src
-  ? `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>`;
+// Cara do jogador (ou iniciais) com a etiqueta do número da camisola no canto.
+const foto = (src, nome, classe = "foto", num = "") => `<div class="${classe} rosto" aria-hidden="true"><span>${esc(iniciais(nome))}</span>${src
+  ? `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.remove()">` : ""}${num !== "" && num != null ? `<i class="camisola">${esc(num)}</i>` : ""}</div>`;
 
 /* ---------- navegação ---------- */
 function mudarAba(aba) {
@@ -464,14 +477,17 @@ function desenharJogo(silencioso = false) {
     ${porComecar ? `<p class="aviso">Plantel. Toca num jogador para o seguir.</p>
     <div class="jogadores">${e.jogadores.map((p, i) => `
       <button class="jogador ${p.inativo ? "inativo" : ""}" data-i="${i}">
-        ${foto(p.foto, p.nome)}
+        ${foto(p.foto, p.nome, "foto", p.num)}
         <div><div class="nome">${esc(p.nome)}</div><div class="sub">${linhaJogador(p)}</div></div>
         <span class="mais" aria-hidden="true">+</span>
       </button>`).join("") || '<div class="vazio">Ainda não há plantel disponível.</div>'}</div>`
+    : e.sem_dados ? `<div class="espera"><div class="carregar"></div>
+        <b>As estatísticas deste jogo ainda não chegaram</b>
+        <p>A ESPN às vezes demora uns minutos a publicar a ficha de um jogo que acabou de começar. Aparecem aqui sozinhas assim que estiverem disponíveis — não precisas de fazer nada.</p></div>`
     : tabelaJogo(e, sigo)}`;
   ecra.querySelectorAll(".segmento button").forEach(b => b.onclick = () => { vibra(); S.equipa = +b.dataset.i; desenharJogo(); });
   ecra.querySelectorAll("[data-i].jogador, tr[data-i]").forEach(b => b.onclick = () => {
-    const p = e.jogadores[+b.dataset.i]; abrirFolha({ nome: p.nome, foto: p.foto, equipa: e.tri, logo: e.logo });
+    const p = e.jogadores[+b.dataset.i]; abrirFolha({ nome: p.nome, foto: p.foto, num: p.num, equipa: e.tri, logo: e.logo });
   });
   const v = document.getElementById("voltar"); if (v) v.onclick = voltarDoJogo;
   if (silencioso) window.scrollTo(0, y);
@@ -485,7 +501,7 @@ function tabelaJogo(e, sigo) {
   const linha = (p) => {
     const i = e.jogadores.indexOf(p), s = p.stats || {};
     return `<tr data-i="${i}" class="${sigo.has(norm(p.nome)) ? "sigo" : ""}">
-      <th scope="row"><span class="quem-t">${foto(p.foto, p.nome, "foto mini-f")}<span><b>${esc(abreviar(p.nome))}</b>${p.campo === true ? '<i class="em" aria-label="em campo"></i>' : ""}</span></span></th>
+      <th scope="row"><span class="quem-t">${foto(p.foto, p.nome, "foto mini-f", p.num)}<span><b>${esc(abreviar(p.nome))}</b>${p.campo === true ? '<i class="em" aria-label="em campo"></i>' : ""}</span></span></th>
       ${col.map(([k]) => `<td class="${k === "pts" ? "forte" : ""} ${k === "pf" && s.pf >= 5 ? "perigo" : ""}">${s[k] ?? 0}</td>`).join("")}
     </tr>`;
   };
@@ -529,12 +545,12 @@ async function procurar(texto) {
   try { r = await api("/api/procurar?q=" + encodeURIComponent(texto)); } catch (e) { caixa.innerHTML = `<div class="vazio">${esc(e.message)}</div>`; return; }
   if (S.aba !== "procurar") return;
   caixa.innerHTML = r.map((p, i) => `
-    <button class="jogador" data-i="${i}">${foto(p.foto, p.nome)}
+    <button class="jogador" data-i="${i}">${foto(p.foto, p.nome, "foto", p.num)}
       <div><div class="nome">${esc(p.nome)}</div><div class="sub">${esc(p.team)}${p.pos ? "&ensp;" + esc(posicao(p.pos)) : ""}${p.lesao ? `&ensp;<span class="lesao">🚑 ${esc(lesao(p.lesao))}</span>` : ""}</div></div>
       ${imagem(p.logo, "logo")}
     </button>`).join("") || `<div class="vazio">Não encontrei ninguém com «${esc(texto)}».</div>`;
   caixa.querySelectorAll(".jogador").forEach(b => b.onclick = () => {
-    const p = r[+b.dataset.i]; abrirFolha({ nome: p.nome, foto: p.foto, equipa: p.team, logo: p.logo });
+    const p = r[+b.dataset.i]; abrirFolha({ nome: p.nome, foto: p.foto, num: p.num, equipa: p.team, logo: p.logo });
   });
 }
 
@@ -667,7 +683,7 @@ function cartao(a, mais) {
               aria-label="Deixar de seguir ${esc(a.jogador)}">${LIXO}<span>Remover</span></button>
     </div>
     <div class="aposta ${mais ? "mexeu" : ""} ${aberta ? "aberta" : ""}" data-id="${a.id}">
-      ${foto(a.foto, a.jogador)}
+      ${foto(a.foto, a.jogador, "foto", a.num)}
       <div><div class="titulo">${esc(a.jogador)}${a.mudo ? `<span class="mudo-ic" aria-label="silenciado">${SEM_SOM}</span>` : ""}</div>${etiqueta(a)}</div>
       <button class="mais-acoes" data-id="${a.id}" aria-label="Opções de ${esc(a.jogador)}">⋯</button>
       <div class="estado">${campo(a)}${progresso(a, mais)}</div>
@@ -825,7 +841,7 @@ function desenharNotifs() {
     ${S.notifs.length ? `<p class="notifs-dica">Desliza para a esquerda para apagar.</p>` : ""}
     ${S.notifs.length ? S.notifs.map(n => {
       const txt = n.texto.split("\n\n")[0];
-      return `<div class="notif-caixa" data-id="${n.id}"><div class="apagar-fundo">Apagar 🗑️</div><div class="notif ${n.id > lidaAte ? "nova" : ""}">${n.jogador ? foto(n.foto, n.jogador) : `<div class="foto rosto" aria-hidden="true"><span>🏀</span></div>`}
+      return `<div class="notif-caixa" data-id="${n.id}"><div class="apagar-fundo">Apagar 🗑️</div><div class="notif ${n.id > lidaAte ? "nova" : ""}">${n.jogador ? foto(n.foto, n.jogador, "foto", n.num) : `<div class="foto rosto" aria-hidden="true"><span>🏀</span></div>`}
         <div><div class="txt">${textoNotif(txt)}</div>
         <div class="hora">${quandoFoi(n.ts)}</div></div></div></div>`;
     }).join("") : `<div class="vazio" style="margin:30px 10px">Ainda não há notificações.<br>Aparecem aqui quando um jogador que segues marca, leva falta ou tem uma stat anulada.</div>`}`;
@@ -923,7 +939,7 @@ function desenharFolha() {
   const pos = v => `${((v - 0.5) / max) * 100}%`;
   document.getElementById("folha").innerHTML = `
     <div class="pega"></div>
-    <div class="quem">${foto(f.foto, f.nome)}<div><div class="nome">${esc(f.nome)}</div>
+    <div class="quem">${foto(f.foto, f.nome, "foto", f.num)}<div><div class="nome">${esc(f.nome)}</div>
       <div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:6px">${imagem(f.logo, "logo-p")}${esc(f.equipa || "")}</div></div></div>
 
     <div class="rotulo">Estatística</div>
