@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>NBA Alerts</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+@font-face { font-family: "Barlow"; font-weight: 400; src: url("/app/fontes/barlow-latin-400-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow"; font-weight: 500; src: url("/app/fontes/barlow-latin-500-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow"; font-weight: 600; src: url("/app/fontes/barlow-latin-600-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow"; font-weight: 700; src: url("/app/fontes/barlow-latin-700-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; src: url("/app/fontes/barlow-condensed-latin-600-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("/app/fontes/barlow-condensed-latin-700-normal.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; font-weight: 800; src: url("/app/fontes/barlow-condensed-latin-800-normal.woff2") format("woff2"); font-display: swap; }
+
+:root {
+  --noite: #0e142c;      /* fundo, o mesmo da foto do bot */
+  --painel: #18203f;
+  --painel-2: #212a4f;
+  --risca: #2c365c;
+  --texto: #ffffff;
+  --suave: #96a0be;
+  --nba: #e61e32;        /* vermelho do "NBA" */
+  --bate: #26c470;       /* linha batida */
+  --falha: #e84855;      /* linha falhada */
+  --linha: #ffc43d;      /* a linha da aposta */
+  --cond: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --corpo: "Barlow", system-ui, sans-serif;
+  --raio: 14px;
+  --abaixo: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--noite); color: var(--texto); font-family: var(--corpo); font-size: 16px; }
+body { min-height: 100vh; padding-bottom: calc(76px + var(--abaixo)); overscroll-behavior: none; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--linha); outline-offset: 2px; }
+img { display: block; }
+.esconder { display: none !important; }
+
+/* ---------- cabeçalho ---------- */
+.topo { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 6px 18px; }
+.marca { font-family: var(--cond); font-weight: 800; font-size: 30px; line-height: 1; letter-spacing: .01em; }
+.marca b { color: var(--nba); font-weight: 800; }
+.marca small { font-family: var(--corpo); font-weight: 500; font-size: 13px; color: var(--suave); letter-spacing: 0; margin-left: 4px; }
+.sino { position: relative; width: 42px; height: 42px; border-radius: 50%; background: var(--painel); display: grid; place-items: center; }
+.sino svg { width: 21px; height: 21px; }
+.sino i { position: absolute; top: -5px; right: -7px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+          background: var(--nba); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; line-height: 17px;
+          text-align: center; border: 2px solid var(--noite); box-sizing: content-box; }
+.sino.toca svg { animation: toca .9s ease-in-out; transform-origin: 50% 15%; }
+@keyframes toca { 20% { transform: rotate(14deg); } 40% { transform: rotate(-12deg); } 60% { transform: rotate(8deg); } 80% { transform: rotate(-4deg); } }
+@media (prefers-reduced-motion: reduce) { .sino.toca svg { animation: none; } }
+
+/* ---------- notificações ---------- */
+.notifs-cab { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px 10px; }
+.notifs-cab b { font-family: var(--cond); font-weight: 800; font-size: 26px; }
+.notif-caixa { position: relative; overflow: hidden; border-bottom: 1px solid var(--risca);
+               transition: height .22s ease-out, opacity .22s; }
+.notif-caixa:last-child { border-bottom: 0; }
+.notif-caixa .apagar-fundo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end;
+                             padding-right: 20px; background: var(--falha); color: #fff; font-weight: 700; font-size: 15px; gap: 6px; }
+.notif { position: relative; display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 12px 8px;
+         background: var(--noite); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.notif.solta { transition: transform .22s ease-out; }
+.notifs-cab button { color: var(--suave); font-size: 14px; font-weight: 600; padding: 6px 2px; }
+.notifs-dica { color: var(--suave); font-size: 13px; margin: -6px 2px 6px; }
+.notif .foto { width: 40px; height: 40px; }
+.notif .foto span { font-size: 15px; }
+.notif .txt { font-size: 15px; line-height: 1.35; white-space: pre-line; }
+.notif .txt b { font-weight: 700; }
+.notif .jogo-n { color: var(--suave); font-size: 13px; margin-top: 3px; white-space: pre-line; }
+.notif .hora { color: var(--suave); font-size: 12px; margin-top: 3px; }
+.notif.nova { background: linear-gradient(90deg, #2a1a33, var(--noite) 70%); }
+h2 { font-family: var(--cond); font-weight: 700; font-size: 22px; margin: 18px 18px 10px; }
+
+/* ---------- separadores em baixo ---------- */
+.abas { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr);
+        background: rgba(14, 20, 44, .96); border-top: 1px solid var(--risca); padding-bottom: var(--abaixo);
+        backdrop-filter: blur(8px); z-index: 20; }
+.aba { padding: 10px 0 12px; display: grid; justify-items: center; gap: 2px; color: var(--suave); font-size: 13px; font-weight: 600; }
+.aba span:first-child { font-size: 21px; line-height: 1.1; }
+.aba[aria-selected="true"] { color: var(--texto); }
+.aba[aria-selected="true"] span:first-child { filter: none; }
+.aba { position: relative; }
+.aba .conta { position: absolute; top: 6px; left: calc(50% + 10px); background: var(--nba); color: #fff; font-size: 11px;
+              font-style: normal; font-weight: 700; border-radius: 9px; padding: 0 6px; line-height: 17px; }
+
+/* ---------- jogos ---------- */
+.jogos { display: grid; gap: 10px; padding: 0 14px; }
+.jogo { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; text-align: left;
+        background: var(--painel); border-radius: var(--raio); padding: 14px 14px; width: 100%; }
+.equipa { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.equipa.casa { flex-direction: row-reverse; text-align: right; }
+.logo { width: 38px; height: 38px; object-fit: contain; flex: none; }
+.tri { font-family: var(--cond); font-weight: 700; font-size: 22px; }
+.pontos { font-family: var(--cond); font-weight: 800; font-size: 28px; font-variant-numeric: tabular-nums; }
+.meio { text-align: center; min-width: 96px; }
+.meio .resultado { font-family: var(--cond); font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; }
+.meio .detalhe { color: var(--suave); font-size: 13px; margin-top: 2px; }
+.vivo { color: var(--texto); }
+.vivo::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--nba);
+                margin-right: 6px; vertical-align: 1px; animation: pulsa 1.6s ease-in-out infinite; }
+@keyframes pulsa { 50% { opacity: .25; } }
+.acomecar { color: var(--texto); font-weight: 600; }
+.acomecar::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--nba);
+                    margin-right: 6px; vertical-align: 1px; box-shadow: 0 0 8px var(--nba); animation: pisca .8s steps(1, end) infinite; }
+@keyframes pisca { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .acomecar::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .vivo::before { animation: none; } }
+
+/* ---------- marcador do jogo aberto ---------- */
+.marcador { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin: 4px 14px 0;
+            padding: 16px 12px; background: var(--painel); border-radius: var(--raio); }
+.marcador .lado { display: grid; justify-items: center; gap: 4px; }
+.marcador .logo { width: 52px; height: 52px; }
+.marcador .centro { text-align: center; }
+.marcador .centro .resultado { font-family: var(--cond); font-weight: 800; font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+.marcador .centro .detalhe { color: var(--suave); font-size: 14px; margin-top: 4px; }
+
+.segmento { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; margin: 14px 14px 8px;
+            background: var(--painel); border-radius: 12px; }
+.segmento button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 6px; border-radius: 9px;
+                   font-family: var(--cond); font-weight: 700; font-size: 19px; color: var(--suave); }
+.segmento button[aria-pressed="true"] { background: var(--painel-2); color: var(--texto); }
+.segmento img { width: 22px; height: 22px; object-fit: contain; }
+.aviso { color: var(--suave); font-size: 14px; margin: 2px 18px 8px; }
+
+/* ---------- jogadores ---------- */
+.jogadores { padding: 0 14px; display: grid; }
+.jogador { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 12px; padding: 10px 4px;
+           border-bottom: 1px solid var(--risca); text-align: left; width: 100%; }
+.jogador:last-child { border-bottom: 0; }
+.foto { width: 48px; height: 48px; border-radius: 50%; background: var(--painel-2); }
+.rosto { position: relative; display: grid; place-items: center; }
+.rosto span { font-family: var(--cond); font-weight: 700; font-size: 18px; color: var(--suave); }
+.rosto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 50%; }
+/* Número da camisola: etiqueta no canto inferior direito da foto. */
+.camisola { position: absolute; right: -7px; bottom: -4px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 6px;
+            background: var(--texto); color: var(--noite); border: 2px solid var(--painel); box-sizing: content-box;
+            font-family: var(--cond); font-weight: 800; font-size: 12px; font-style: normal; line-height: 16px; text-align: center; }
+.quem .camisola { min-width: 20px; height: 20px; line-height: 20px; font-size: 14px; }
+.mini-f .camisola { min-width: 14px; height: 13px; line-height: 13px; font-size: 10px; padding: 0 2px; border-width: 1.5px; right: -5px; bottom: -3px; border-radius: 5px; }
+.notif .camisola { border-color: var(--noite); }
+.quem .rosto span { font-size: 24px; }
+.nome { font-weight: 600; font-size: 16px; }
+.sub { color: var(--suave); font-size: 14px; margin-top: 2px; }
+.sub strong { color: var(--texto); font-weight: 600; }
+.lesao { color: var(--falha); font-weight: 600; }
+.jogador.inativo { opacity: .45; }
+.mais { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--painel);
+        font-size: 22px; line-height: 1; color: var(--suave); }
+
+/* ---------- ficha do jogo: tabela ---------- */
+.voltar { margin: 2px 14px 8px; color: var(--suave); font-weight: 600; font-size: 15px; padding: 4px 2px; }
+.tabela-caixa { margin: 0 14px; overflow-x: auto; background: var(--painel); border-radius: var(--raio); }
+.tabela { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tabela th, .tabela td { padding: 9px 4px; text-align: center; font-size: 14px; border-bottom: 1px solid var(--risca); white-space: nowrap; }
+.tabela td:last-child, .tabela thead th:last-child { padding-right: 10px; }
+.tabela thead th { color: var(--suave); font-size: 12px; font-weight: 600; letter-spacing: .03em; padding-top: 11px; }
+.tabela thead th:first-child, .tabela tbody th { text-align: left; padding-left: 10px; position: sticky; left: 0; background: var(--painel); z-index: 1; }
+.tabela tbody tr:last-child th, .tabela tbody tr:last-child td { border-bottom: 0; }
+.tabela td { color: var(--suave); }
+.tabela td.forte { color: var(--texto); font-weight: 700; }
+.tabela td.perigo { color: var(--falha); font-weight: 700; }
+.tabela tr { cursor: pointer; }
+.tabela tr.sigo th { box-shadow: inset 3px 0 0 var(--linha); }
+.tabela tr.sigo th b { color: var(--linha); }
+.quem-t { display: flex; align-items: center; gap: 8px; }
+.quem-t b { font-weight: 600; font-size: 14px; }
+.foto.mini-f { width: 28px; height: 28px; flex: none; }
+.foto.mini-f span { font-size: 11px; }
+.em { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--bate); margin-left: 6px; vertical-align: 2px; }
+.em-leg { white-space: nowrap; margin-left: 6px; }
+.em-leg .em { margin: 0 3px 0 0; }
+
+.espera { margin: 4px 14px; padding: 22px 20px; background: var(--painel); border-radius: var(--raio); text-align: center; }
+.espera .carregar { margin: 0 auto 14px; }
+.espera b { display: block; font-size: 16px; margin-bottom: 6px; }
+.espera p { margin: 0; color: var(--suave); font-size: 14px; line-height: 1.45; }
+
+/* ---------- procurar ---------- */
+.caixa { margin: 4px 14px 6px; position: relative; }
+.caixa input { width: 100%; font: inherit; font-size: 17px; color: var(--texto); background: var(--painel);
+               border: 1px solid var(--risca); border-radius: 12px; padding: 13px 14px 13px 42px; }
+.caixa input::placeholder { color: var(--suave); }
+.caixa::before { content: "🔎"; position: absolute; left: 14px; top: 13px; font-size: 16px; opacity: .8; }
+
+/* ---------- lista ---------- */
+.aposta-caixa { position: relative; margin: 0 14px 10px; border-radius: var(--raio); overflow: hidden; }
+.acoes-fundo { position: absolute; top: 0; right: 0; bottom: 0; width: 172px; display: grid; grid-template-columns: 1fr 1fr; visibility: hidden; }
+.aposta-caixa.mexe .acoes-fundo { visibility: visible; }
+.acao { display: grid; place-content: center; justify-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #fff; }
+.acao svg { width: 22px; height: 22px; }
+.acao.som { background: #3b4a8a; }
+.acao.som.mudo { background: var(--bate); }
+.acao.tirar { background: var(--falha); }
+.aposta { position: relative; display: grid; grid-template-columns: 52px 1fr auto; gap: 6px 12px; align-items: center;
+          padding: 14px; background: var(--painel); border-radius: var(--raio); touch-action: pan-y;
+          transition: transform .22s ease-out; }
+.aposta.a-mexer { transition: none; user-select: none; -webkit-user-select: none; }
+.aposta.aberta { transform: translateX(-172px); }
+.mais-acoes { align-self: start; width: 32px; height: 32px; border-radius: 50%; color: var(--suave); font-size: 20px; line-height: 1; }
+/* Em campo / banco: a bolinha fica na mesma coluna e com o mesmo tamanho da bolinha vermelha do resultado. */
+.campo { display: block; font-size: 13px; font-weight: 600; color: var(--suave); margin-bottom: 2px; }
+.campo::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #56608a;
+                 margin-right: 6px; vertical-align: 1px; }
+.campo.sim { color: var(--bate); }
+.campo.sim::before { background: var(--bate); }
+.mudo-ic { display: inline-block; vertical-align: -2px; margin-left: 6px; color: var(--falha); }
+.mudo-ic svg { width: 16px; height: 16px; }
+@media (prefers-reduced-motion: reduce) { .aposta { transition: none; } }
+.aposta .titulo { font-weight: 700; font-size: 17px; }
+.etiqueta { display: inline-block; margin-top: 6px; font-family: var(--cond); font-weight: 700; font-size: 17px;
+            padding: 2px 9px; border-radius: 7px; background: var(--nba); }
+.etiqueta.under { background: #3b4a8a; }
+.etiqueta.sem { background: var(--painel-2); color: var(--suave); }
+.aposta .foto { width: 52px; height: 52px; }
+.aposta .estado { grid-column: 2 / -1; color: var(--suave); font-size: 14px; white-space: pre-line; }
+.aposta .estado:has(.valor) { white-space: normal; }
+.aposta .valor { display: flex; align-items: baseline; gap: 6px; color: var(--suave); font-size: 15px; white-space: normal; }
+.aposta .icone { font-size: 13px; line-height: 1; }
+.medidor { flex: none; width: 84px; display: grid; gap: 4px; justify-items: end; }
+.medidor .num { display: flex; align-items: center; gap: 5px; font-size: 13px; line-height: 1; }
+.medidor .num b { font-family: var(--cond); font-weight: 700; font-size: 17px; color: var(--texto); font-variant-numeric: tabular-nums; }
+.medidor .salto { font-size: 14px; }
+.aposta .baixo { display: flex; align-items: flex-end; gap: 10px; margin-top: 6px; }
+.aposta .baixo .mini { margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aposta .valor b { font-family: var(--cond); font-weight: 800; font-size: 26px; color: var(--texto); line-height: 1; }
+.aposta .falta { margin-left: auto; font-weight: 700; font-size: 14px; }
+.barra-prog { flex: none; width: 84px; height: 5px; border-radius: 3px; background: var(--painel-2); overflow: hidden; }
+.barra-prog i { display: block; height: 100%; border-radius: 4px; transition: width .6s ease-out; }
+.aposta .resumo { font-size: 14px; color: var(--suave); }
+.aposta .mini { font-size: 13px; color: var(--suave); margin-top: 4px; }
+.salto { font-style: normal; font-family: var(--cond); font-weight: 800; font-size: 18px; color: var(--bate);
+         animation: salta 2.4s ease-out forwards; }
+@keyframes salta { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
+.aposta.mexeu { animation: brilha 1.6s ease-out; }
+@keyframes brilha { 0% { box-shadow: inset 0 0 0 2px var(--bate); } 100% { box-shadow: inset 0 0 0 2px transparent; } }
+@media (prefers-reduced-motion: reduce) { .salto, .aposta.mexeu { animation: none; } .barra-prog i { transition: none; } }
+.grupo { display: flex; justify-content: space-between; margin: 16px 18px 8px; font-family: var(--cond); font-weight: 700;
+         font-size: 17px; color: var(--suave); letter-spacing: .02em; }
+.grupo span { font-family: var(--corpo); font-weight: 500; font-size: 14px; }
+button.grupo { width: calc(100% - 36px); text-align: left; align-items: baseline; }
+button.grupo span::after { content: " ›"; font-size: 17px; }
+.mini.ir-jogo { cursor: pointer; }
+.segmento.filtro { margin: 4px 14px 6px; }
+.segmento.filtro button { font-size: 17px; padding: 8px 6px; }
+.segmento.filtro em { font-style: normal; font-family: var(--corpo); font-size: 12px; font-weight: 700; background: var(--nba);
+                      color: #fff; border-radius: 9px; padding: 0 6px; line-height: 18px; }
+
+.vazio { margin: 40px 24px; text-align: center; color: var(--suave); line-height: 1.5; }
+.vazio button { margin-top: 14px; }
+.botao { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 20px; border-radius: 12px;
+         font-weight: 700; font-size: 16px; background: var(--painel-2); }
+.botao.principal { background: var(--nba); color: #fff; }
+.botao:disabled { opacity: .5; }
+.carregar { margin: 30px auto; width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--risca);
+            border-top-color: var(--texto); animation: roda .8s linear infinite; }
+@keyframes roda { to { transform: rotate(360deg); } }
+
+/* ---------- folha do jogador (de baixo para cima) ---------- */
+.fundo { position: fixed; inset: 0; background: rgba(4, 7, 18, .6); z-index: 30; opacity: 0; transition: opacity .2s; }
+.fundo.aberto { opacity: 1; }
+.folha { position: fixed; left: 0; right: 0; bottom: 0; z-index: 31; max-height: 92vh; overflow-y: auto;
+         background: var(--noite); border-radius: 20px 20px 0 0; border-top: 1px solid var(--risca);
+         padding: 8px 16px calc(20px + var(--abaixo)); transform: translateY(100%); transition: transform .25s ease-out; }
+.folha.aberto { transform: none; }
+@media (prefers-reduced-motion: reduce) { .folha, .fundo { transition: none; } }
+.pega { width: 40px; height: 4px; border-radius: 2px; background: var(--risca); margin: 2px auto 12px; }
+.quem { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; }
+.quem .foto { width: 64px; height: 64px; }
+.logo-p { width: 20px; height: 20px; object-fit: contain; }
+.quem .nome { font-family: var(--cond); font-weight: 800; font-size: 28px; line-height: 1; }
+.rotulo { color: var(--suave); font-size: 14px; font-weight: 600; margin: 18px 0 8px; }
+.fichas { display: flex; flex-wrap: wrap; gap: 7px; }
+.ficha { padding: 8px 12px; border-radius: 10px; background: var(--painel); font-weight: 600; font-size: 15px; color: var(--suave); }
+.ficha[aria-pressed="true"] { background: var(--texto); color: var(--noite); }
+.lados { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.lados button { padding: 11px 6px; border-radius: 10px; background: var(--painel); font-weight: 700; color: var(--suave); }
+.lados button[aria-pressed="true"][data-lado="over"] { background: var(--nba); color: #fff; }
+.lados button[aria-pressed="true"][data-lado="under"] { background: #3b4a8a; color: #fff; }
+.lados button[aria-pressed="true"][data-lado="sem"] { background: var(--painel-2); color: #fff; }
+
+/* O seletor da linha: o número grande de pavilhão e a régua com a média. */
+.linha-caixa { margin-top: 6px; padding: 16px 14px 12px; background: var(--painel); border-radius: var(--raio); }
+.placar { display: grid; grid-template-columns: 56px 1fr 56px; align-items: center; }
+.placar button { width: 56px; height: 56px; border-radius: 50%; background: var(--painel-2); font-size: 30px; font-weight: 600; line-height: 1; }
+.numero { text-align: center; font-family: var(--cond); font-weight: 800; font-size: 72px; line-height: .9;
+          font-variant-numeric: tabular-nums; color: var(--linha); letter-spacing: .01em; }
+.numero small { display: block; font-family: var(--corpo); font-weight: 500; font-size: 14px; color: var(--suave); letter-spacing: 0; margin-top: 8px; }
+.regua { position: relative; margin: 18px 4px 2px; height: 36px; }
+.regua .riscos { position: absolute; left: 0; right: 0; top: 10px; height: 16px;
+                 background-image: linear-gradient(90deg, #4a5585 0 2px, transparent 2px), linear-gradient(90deg, var(--risca) 0 1px, transparent 1px);
+                 background-size: var(--cinco) 16px, var(--um) 8px; background-repeat: repeat-x; background-position: 0 0, 0 4px; }
+.regua .media { position: absolute; top: 2px; width: 2px; height: 32px; background: var(--texto); transform: translateX(-1px); }
+.regua .media::after { content: attr(data-texto); position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
+                       font-size: 12px; color: var(--suave); white-space: nowrap; }
+.regua input { position: absolute; inset: 0; width: 100%; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; }
+.regua input::-webkit-slider-runnable-track { height: 36px; background: transparent; }
+.regua input::-moz-range-track { height: 36px; background: transparent; }
+.regua input::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 36px; border-radius: 3px; background: var(--linha);
+                                     box-shadow: 0 0 0 4px rgba(255, 196, 61, .25); }
+.regua input::-moz-range-thumb { width: 6px; height: 36px; border: 0; border-radius: 3px; background: var(--linha); }
+.acoes { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 18px; }
+
+/* ---------- análise ---------- */
+.analise { margin-top: 16px; display: grid; gap: 10px; }
+.grafico { background: var(--painel); border-radius: var(--raio); padding: 14px 12px 10px; }
+.grafico .cab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.grafico .cab b { font-family: var(--cond); font-weight: 700; font-size: 19px; }
+.grafico .cab span { font-family: var(--cond); font-weight: 800; font-size: 24px; }
+.barras { position: relative; height: 130px; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; align-items: end; }
+.barra { position: relative; border-radius: 6px 6px 3px 3px; }
+.barra.bate { background: var(--bate); }
+.barra.falha { background: var(--falha); }
+.barra i { position: absolute; top: -20px; left: 0; right: 0; text-align: center; font-style: normal;
+           font-family: var(--cond); font-weight: 800; font-size: 17px; }
+.traco { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--linha); pointer-events: none; }
+.rotulos { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; margin-top: 6px; text-align: center; }
+.rotulos div { font-size: 12px; color: var(--suave); line-height: 1.3; }
+.rotulos div b { display: block; color: var(--texto); font-weight: 600; font-size: 13px; }
+.numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.numeros div { background: var(--painel); border-radius: 12px; padding: 10px 4px; text-align: center; color: var(--suave); font-size: 12px; }
+.numeros div b { display: block; color: var(--texto); font-family: var(--cond); font-weight: 800; font-size: 24px; }
+.assinatura { text-align: center; color: var(--suave); font-size: 12px; margin-top: 2px; }
+.assinatura b { color: var(--nba); }
+
+/* ---------- aviso rápido ---------- */
+.toast { position: fixed; left: 14px; right: 14px; bottom: calc(86px + var(--abaixo)); z-index: 40; padding: 13px 16px;
+         border-radius: 12px; background: var(--texto); color: var(--noite); font-weight: 600; text-align: center;
+         transform: translateY(20px); opacity: 0; transition: .2s; pointer-events: none; }
+.toast.ver { transform: none; opacity: 1; }
+</style>
+</head>
+<body>
+<header class="topo">
+  <div class="marca"><b>NBA</b> ALERTS <small>by André Cunha</small></div>
+  <button class="sino" id="sino" aria-label="Notificações">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+    <i class="esconder" id="naoLidas"></i>
+  </button>
+</header>
+
+<main id="ecra"></main>
+
+<nav class="abas" role="tablist">
+  <button class="aba" role="tab" data-aba="jogos" aria-selected="true"><span>🏀</span><span>Jogos</span></button>
+  <button class="aba" role="tab" data-aba="procurar" aria-selected="false"><span>🔎</span><span>Procurar</span></button>
+  <button class="aba" role="tab" data-aba="lista" aria-selected="false"><span>📋</span><span>A minha lista</span><i class="conta esconder" id="conta"></i></button>
+</nav>
+
+<div class="fundo esconder" id="fundo"></div>
+<section class="folha esconder" id="folha" role="dialog" aria-modal="true"></section>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#0e142c"); tg.setBackgroundColor("#0e142c"); } catch (e) {} }
+
+const GRANDES = ["pts", "pra", "pr", "pa", "ra"];
+const S = { aba: "jogos", stats: [], jogo: null, equipa: 0, folha: null, lista: [] };
+const ecra = document.getElementById("ecra");
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const vibra = tipo => { try { tg && tg.HapticFeedback[tipo === "ok" ? "notificationOccurred" : "selectionChanged"](tipo === "ok" ? "success" : undefined); } catch (e) {} };
+const guardado = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+// Nome da estatística como aparece nas etiquetas: completo, ou abreviado quando é comprido.
+const NOMES = { pts: "Pontos", reb: "Ressaltos", ast: "Assistências", "3pt": "3PT", stl: "Roubos", blk: "Desarmes",
+                pra: "PRA", pr: "PR", pa: "PA", ra: "RA", dd: "Duplo-Duplo", td: "Triplo-Duplo" };
+const nomeStat = (id, nome = "") => NOMES[id] || (nome.charAt(0).toUpperCase() + nome.slice(1));
+const fmt = n => (Math.round(n * 10) / 10).toString();
+
+async function api(caminho, opcoes = {}) {
+  const r = await fetch(caminho, { ...opcoes, headers: { "X-Init-Data": tg ? tg.initData : "", "Content-Type": "application/json" } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.erro || "Algo correu mal. Tenta outra vez.");
+  return j;
+}
+
+function toast(texto) {
+  const t = document.getElementById("toast");
+  t.textContent = texto; t.classList.add("ver");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("ver"), 2600);
+}
+const aCarregar = () => { ecra.innerHTML = '<div class="carregar" aria-label="A carregar"></div>'; };
+const erro = (msg, repetir) => {
+  ecra.innerHTML = `<div class="vazio">${esc(msg)}<br><button class="botao" id="repetir">Tentar outra vez</button></div>`;
+  document.getElementById("repetir").onclick = repetir;
+};
+const imagem = (src, classe, alt = "") => src ? `<img class="${classe}" src="${esc(src)}" alt="${esc(alt)}" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="${classe}"></div>`;
+const iniciais = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase();
+// Cara do jogador (ou iniciais) com a etiqueta do número da camisola no canto.
+const foto = (src, nome, classe = "foto", num = "") => `<div class="${classe} rosto" aria-hidden="true"><span>${esc(iniciais(nome))}</span>${src
+  ? `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.remove()">` : ""}${num !== "" && num != null ? `<i class="camisola">${esc(num)}</i>` : ""}</div>`;
+
+/* ---------- navegação ---------- */
+function mudarAba(aba) {
+  clearTimeout(verLista.t); clearTimeout(desenharJogo.t);
+  S.aba = aba; S.jogo = null;
+  document.querySelectorAll(".aba").forEach(b => b.setAttribute("aria-selected", b.dataset.aba === aba));
+  if (tg) tg.BackButton.hide();
+  ({ jogos: verJogos, procurar: verProcurar, lista: verLista })[aba]();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll(".aba").forEach(b => b.onclick = () => { vibra(); mudarAba(b.dataset.aba); });
+const voltarDoJogo = () => mudarAba(S.voltar || "jogos");
+if (tg) tg.BackButton.onClick(() => { if (S.folha) fecharFolha(); else if (S.jogo) voltarDoJogo(); });
+
+/* ---------- jogos ---------- */
+async function verJogos() {
+  aCarregar();
+  let jogos;
+  try { jogos = await api("/api/jogos"); } catch (e) { return erro(e.message, verJogos); }
+  if (S.aba !== "jogos") return;
+  if (!jogos.length) { ecra.innerHTML = '<div class="vazio">Hoje não há jogos da NBA.<br>Podes procurar um jogador para o seguir no próximo jogo.</div>'; return; }
+  const vivos = jogos.filter(g => g.estado === 2).length;
+  ecra.innerHTML = `<h2>${vivos ? `${vivos} jogo${vivos > 1 ? "s" : ""} a decorrer` : "Jogos de hoje"}</h2>
+    <div class="jogos">${jogos.map(g => `
+      <button class="jogo" data-id="${esc(g.id)}">
+        <div class="equipa">${imagem(g.fora.logo, "logo")}<span class="tri">${esc(g.fora.tri)}</span></div>
+        <div class="meio">${g.estado === 1
+          ? `<div class="resultado" style="font-size:20px">${esc(hora(g.quando))}</div>${prestes(g.inicio)
+              ? `<div class="detalhe acomecar">A começar</div>` : `<div class="detalhe">${esc(dia(g.quando))}</div>`}`
+          : `<div class="resultado">${g.fora.score}–${g.casa.score}</div><div class="detalhe ${g.estado === 2 ? "vivo" : ""}">${g.estado === 2 ? esc(g.relogio) : "Final"}</div>`}
+        </div>
+        <div class="equipa casa">${imagem(g.casa.logo, "logo")}<span class="tri">${esc(g.casa.tri)}</span></div>
+      </button>`).join("")}</div>`;
+  ecra.querySelectorAll(".jogo").forEach(b => b.onclick = () => { vibra(); abrirJogo(b.dataset.id); });
+}
+const PRESTES = 15 * 60 * 1000;   // "a começar" nos últimos 15 minutos antes do início
+const prestes = inicio => inicio && new Date(inicio) - Date.now() <= PRESTES;
+const hora = q => (q.match(/às (\d\d:\d\d)/) || [, ""])[1];
+const dia = q => q.includes("amanhã") ? "amanhã" : q.startsWith("daqui") ? q.split(" (")[0] : "";
+
+async function abrirJogo(id, voltar = "jogos") {
+  clearTimeout(verLista.t); clearTimeout(desenharJogo.t);
+  S.voltar = voltar; S.aba = "jogo"; S.jogoId = id;
+  aCarregar(); window.scrollTo(0, 0);
+  if (tg) tg.BackButton.show();
+  try { S.jogo = await api("/api/jogo/" + encodeURIComponent(id)); } catch (e) { return erro(e.message, () => abrirJogo(id, voltar)); }
+  S.equipa = 0;
+  if (voltar === "lista") {   // abre na equipa de quem segues
+    const sigo = new Set(S.lista.map(a => norm(a.jogador)));
+    const conta = S.jogo.equipas.map(t => t.jogadores.filter(p => sigo.has(norm(p.nome))).length);
+    if (conta[1] > conta[0]) S.equipa = 1;
+  }
+  desenharJogo();
+}
+// Jogo a decorrer: a ficha atualiza-se sozinha de 10 em 10 segundos.
+async function atualizarJogo() {
+  const id = S.jogoId;
+  if (S.aba !== "jogo" || !S.jogo || document.hidden || S.folha) return agendarJogo();
+  try { const g = await api("/api/jogo/" + encodeURIComponent(id)); if (S.aba === "jogo" && S.jogoId === id) { S.jogo = g; desenharJogo(true); } }
+  catch (e) { agendarJogo(); }
+}
+function agendarJogo() {
+  clearTimeout(desenharJogo.t);
+  if (S.aba === "jogo" && S.jogo && S.jogo.estado === 2) desenharJogo.t = setTimeout(atualizarJogo, ATUALIZAR);
+}
+
+function desenharJogo(silencioso = false) {
+  const g = S.jogo, [f, c] = g.equipas, porComecar = g.estado === 1;
+  const e = g.equipas[S.equipa];
+  const sigo = new Set(S.lista.map(a => norm(a.jogador)));
+  const y = window.scrollY;
+  ecra.innerHTML = `
+    ${S.voltar === "lista" ? `<button class="voltar" id="voltar">‹ A minha lista</button>` : ""}
+    <div class="marcador">
+      <div class="lado">${imagem(f.logo, "logo")}<span class="tri">${esc(f.tri)}</span></div>
+      <div class="centro">${porComecar ? `<div class="resultado" style="font-size:30px">@</div><div class="detalhe">Ainda não começou</div>`
+        : `<div class="resultado">${f.score}–${c.score}</div><div class="detalhe ${g.estado === 2 ? "vivo" : ""}">${g.estado === 2 ? esc(g.relogio) : "Final"}</div>`}</div>
+      <div class="lado">${imagem(c.logo, "logo")}<span class="tri">${esc(c.tri)}</span></div>
+    </div>
+    <div class="segmento">${g.equipas.map((t, i) => `<button aria-pressed="${i === S.equipa}" data-i="${i}">${imagem(t.logo, "")}${esc(t.tri)}</button>`).join("")}</div>
+    ${porComecar ? `<p class="aviso">Plantel. Toca num jogador para o seguir.</p>
+    <div class="jogadores">${e.jogadores.map((p, i) => `
+      <button class="jogador ${p.inativo ? "inativo" : ""}" data-i="${i}">
+        ${foto(p.foto, p.nome, "foto", p.num)}
+        <div><div class="nome">${esc(p.nome)}</div><div class="sub">${linhaJogador(p)}</div></div>
+        <span class="mais" aria-hidden="true">+</span>
+      </button>`).join("") || '<div class="vazio">Ainda não há plantel disponível.</div>'}</div>`
+    : e.sem_dados ? `<div class="espera"><div class="carregar"></div>
+        <b>As estatísticas deste jogo ainda não chegaram</b>
+        <p>A ESPN às vezes demora uns minutos a publicar a ficha de um jogo que acabou de começar. Aparecem aqui sozinhas assim que estiverem disponíveis — não precisas de fazer nada.</p></div>`
+    : tabelaJogo(e, sigo)}`;
+  ecra.querySelectorAll(".segmento button").forEach(b => b.onclick = () => { vibra(); S.equipa = +b.dataset.i; desenharJogo(); });
+  ecra.querySelectorAll("[data-i].jogador, tr[data-i]").forEach(b => b.onclick = () => {
+    const p = e.jogadores[+b.dataset.i]; abrirFolha({ nome: p.nome, foto: p.foto, num: p.num, equipa: e.tri, logo: e.logo });
+  });
+  const v = document.getElementById("voltar"); if (v) v.onclick = voltarDoJogo;
+  if (silencioso) window.scrollTo(0, y);
+  agendarJogo();
+}
+
+// Estatísticas de todos os jogadores da equipa (os que segues ficam marcados).
+function tabelaJogo(e, sigo) {
+  const jogaram = e.jogadores.filter(p => !p.inativo), fora = e.jogadores.filter(p => p.inativo);
+  const col = [["min", "MIN"], ["pts", "PTS"], ["reb", "RES"], ["ast", "AST"], ["3pt", "3PT"], ["stl", "ROU"], ["blk", "DES"], ["pf", "F"]];
+  const linha = (p) => {
+    const i = e.jogadores.indexOf(p), s = p.stats || {};
+    return `<tr data-i="${i}" class="${sigo.has(norm(p.nome)) ? "sigo" : ""}">
+      <th scope="row"><span class="quem-t">${foto(p.foto, p.nome, "foto mini-f", p.num)}<span><b>${esc(abreviar(p.nome))}</b>${p.campo === true ? '<i class="em" aria-label="em campo"></i>' : ""}</span></span></th>
+      ${col.map(([k]) => `<td class="${k === "pts" ? "forte" : ""} ${k === "pf" && s.pf >= 5 ? "perigo" : ""}">${s[k] ?? 0}</td>`).join("")}
+    </tr>`;
+  };
+  return `<p class="aviso">Toca num jogador para o seguir.${jogaram.some(p => p.campo != null) ? ' <span class="em-leg"><i class="em"></i> em campo</span>' : ""}</p>
+    <div class="tabela-caixa"><table class="tabela">
+      <thead><tr><th scope="col">Jogador</th>${col.map(([, t]) => `<th scope="col">${t}</th>`).join("")}</tr></thead>
+      <tbody>${jogaram.map(linha).join("")}</tbody>
+    </table></div>
+    ${fora.length ? `<p class="aviso" style="margin-top:12px">Não jogam: ${fora.map(p => esc(p.nome)).join(", ")}</p>` : ""}`;
+}
+const abreviar = n => { const p = n.split(" "); return p.length > 1 ? `${p[0][0]}. ${p.slice(1).join(" ")}` : n; };
+const norm = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+function linhaJogador(p) {
+  if (p.inativo) return "Não joga";
+  if (p.stats) {
+    const s = p.stats, partes = [`<strong>${s.pts}</strong> pts`, `<strong>${s.reb}</strong> res`, `<strong>${s.ast}</strong> ast`];
+    if (s["3pt"]) partes.push(`<strong>${s["3pt"]}</strong> tri`);
+    partes.push(`${s.min} min`);
+    if (s.pf >= 4) partes.push(`<span class="lesao">${s.pf} faltas</span>`);
+    return partes.join("&ensp;");
+  }
+  return [p.pos ? esc(posicao(p.pos)) : "", p.lesao ? `<span class="lesao">🚑 ${esc(lesao(p.lesao))}</span>` : ""].filter(Boolean).join("&ensp;");
+}
+const posicao = p => ({ G: "Base/Extremo", PG: "Base", SG: "Extremo", F: "Extremo-poste", SF: "Extremo", PF: "Extremo-poste", C: "Poste" }[p] || p);
+const lesao = l => ({ "Out": "Fora", "Day-To-Day": "Em dúvida", "Questionable": "Em dúvida", "Doubtful": "Pouco provável" }[l] || l);
+
+/* ---------- procurar ---------- */
+function verProcurar() {
+  ecra.innerHTML = `<h2>Procurar jogador</h2>
+    <div class="caixa"><input id="q" type="search" placeholder="Nome, ex.: LeBron, Curry, Jokić" autocomplete="off" enterkeyhint="search"></div>
+    <div id="resultados" class="jogadores"><div class="vazio">Escreve pelo menos duas letras.</div></div>`;
+  const q = document.getElementById("q");
+  q.oninput = () => { clearTimeout(verProcurar.t); verProcurar.t = setTimeout(() => procurar(q.value), 250); };
+  setTimeout(() => q.focus(), 50);
+}
+async function procurar(texto) {
+  const caixa = document.getElementById("resultados");
+  if (texto.trim().length < 2) { caixa.innerHTML = '<div class="vazio">Escreve pelo menos duas letras.</div>'; return; }
+  let r;
+  try { r = await api("/api/procurar?q=" + encodeURIComponent(texto)); } catch (e) { caixa.innerHTML = `<div class="vazio">${esc(e.message)}</div>`; return; }
+  if (S.aba !== "procurar") return;
+  caixa.innerHTML = r.map((p, i) => `
+    <button class="jogador" data-i="${i}">${foto(p.foto, p.nome, "foto", p.num)}
+      <div><div class="nome">${esc(p.nome)}</div><div class="sub">${esc(p.team)}${p.pos ? "&ensp;" + esc(posicao(p.pos)) : ""}${p.lesao ? `&ensp;<span class="lesao">🚑 ${esc(lesao(p.lesao))}</span>` : ""}</div></div>
+      ${imagem(p.logo, "logo")}
+    </button>`).join("") || `<div class="vazio">Não encontrei ninguém com «${esc(texto)}».</div>`;
+  caixa.querySelectorAll(".jogador").forEach(b => b.onclick = () => {
+    const p = r[+b.dataset.i]; abrirFolha({ nome: p.nome, foto: p.foto, num: p.num, equipa: p.team, logo: p.logo });
+  });
+}
+
+/* ---------- lista ---------- */
+const ATUALIZAR = 10000;   // a lista atualiza-se de 10 em 10 segundos
+S.valores = {};             // último valor visto de cada aposta, para mostrar o "+2"
+
+async function verLista(silencioso = false) {
+  clearTimeout(verLista.t);
+  if (!silencioso) aCarregar();
+  let nova;
+  try { nova = await api("/api/lista"); }
+  catch (e) { if (!silencioso) return erro(e.message, () => verLista()); nova = S.lista; }
+  if (S.aba !== "lista") return;
+  S.lista = nova; contar();
+  if (!S.lista.length) {
+    ecra.innerHTML = `<div class="vazio">Ainda não segues nenhuma aposta.<br>Escolhe um jogo ou procura um jogador.<br>
+      <button class="botao principal" id="irJogos">Ver jogos de hoje</button></div>`;
+    document.getElementById("irJogos").onclick = () => mudarAba("jogos"); return;
+  }
+  // O que subiu desde a última vez (para o "+N")?
+  const subiu = {};
+  S.lista.forEach(a => {
+    if (a.valor == null) return;
+    const antes = S.valores[a.id];
+    if (antes != null && a.valor > antes) subiu[a.id] = a.valor - antes;
+    S.valores[a.id] = a.valor;
+  });
+  // Duas abas: todas as apostas, ou só as dos jogos a decorrer. Sempre agrupadas por jogo, pela hora.
+  const aoVivo = S.lista.filter(a => a.fase === "vivo");
+  const mostrar = S.filtro === "vivo" ? aoVivo : S.lista;
+  const { abertas, resolvidas } = ordenar(mostrar);
+  let html = "", grupo = null;
+  abertas.forEach(a => {
+    const g = a.par || "";
+    if (g !== grupo) {
+      grupo = g;
+      html += a.gid ? `<button class="grupo ir-jogo" data-gid="${esc(a.gid)}">${cabecalho(a)}</button>` : `<div class="grupo">${cabecalho(a)}</div>`;
+    }
+    html += cartao(a, subiu[a.id]);
+  });
+  if (resolvidas.length) html += `<div class="grupo">Já resolvidas</div>` + resolvidas.map(a => cartao(a, subiu[a.id])).join("");
+  if (!mostrar.length) html = `<div class="vazio">Nenhum dos teus jogos está a decorrer agora.</div>`;
+  ecra.innerHTML = `<h2>A minha lista</h2>
+    <div class="segmento filtro" role="tablist" aria-label="Mostrar">
+      <button data-filtro="todos" aria-pressed="${S.filtro !== "vivo"}">Os meus jogos</button>
+      <button data-filtro="vivo" aria-pressed="${S.filtro === "vivo"}"><span class="${aoVivo.length ? "vivo" : ""}">Ao vivo</span>${aoVivo.length ? `<em>${aoVivo.length}</em>` : ""}</button>
+    </div>` + html;
+  ecra.querySelectorAll("[data-filtro]").forEach(b => b.onclick = () => {
+    vibra(); S.filtro = b.dataset.filtro; guardar("filtro", S.filtro); verLista(true); window.scrollTo(0, 0);
+  });
+  ecra.querySelectorAll(".aposta-caixa").forEach(arrastarCartao);
+  ecra.querySelectorAll(".ir-jogo").forEach(b => b.onclick = e => {
+    if (!b.dataset.gid || S.aberta != null) return;
+    e.stopPropagation(); vibra(); abrirJogo(b.dataset.gid, "lista");
+  });
+  ecra.querySelectorAll(".mais-acoes").forEach(b => b.onclick = () => {   // alternativa ao deslizar
+    const caixa = b.closest(".aposta-caixa"); abrirCartao(caixa, S.aberta !== +caixa.dataset.id);
+  });
+  ecra.querySelectorAll(".acao.som").forEach(b => b.onclick = async () => {
+    const a = S.lista.find(x => String(x.id) === b.dataset.id);
+    const mudo = !a.mudo;
+    try {
+      await api(`/api/lista/${a.id}/mudo`, { method: "POST", body: JSON.stringify({ mudo }) });
+      a.mudo = mudo; vibra("ok"); S.aberta = null;
+      toast(mudo ? `Silenciado: sem avisos de ${a.jogador}` : `Voltas a receber avisos de ${a.jogador}`);
+      verLista(true);
+    } catch (e) { toast(e.message); }
+  });
+  ecra.querySelectorAll(".acao.tirar").forEach(b => b.onclick = async () => {
+    const a = S.lista.find(x => String(x.id) === b.dataset.id);
+    const desc = a.linha == null ? nomeStat(a.stat, a.stat_nome) : `${a.lado === "under" ? "Under" : "Over"} ${fmt(a.linha)} ${nomeStat(a.stat, a.stat_nome)}`;
+    if (!await confirmar(`Deixar de seguir ${a.jogador} (${desc})?`)) return;
+    try { await api("/api/lista/" + b.dataset.id, { method: "DELETE" }); vibra("ok"); toast("Deixaste de seguir"); S.aberta = null; verLista(); }
+    catch (e) { toast(e.message); }
+  });
+  if (Object.keys(subiu).length) vibra("ok");
+  verLista.t = setTimeout(function repetir() {
+    if (S.arrastar) { verLista.t = setTimeout(repetir, 1500); return; }
+    if (S.aba === "lista" && !document.hidden) verLista(true);
+  }, ATUALIZAR);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && S.aba === "lista") verLista(true); });
+
+S.filtro = guardado("filtro") || "todos";
+
+// Já decidida: a linha já bateu (✅), o under já perdeu (❌) ou o jogo acabou.
+function resolvida(a) {
+  if (a.fase === "fim") return true;
+  if (a.valor == null) return false;
+  if (a.alvo_dd) return a.valor >= a.alvo_dd;
+  if (a.alvo != null) return a.valor >= a.alvo;
+  return false;
+}
+function ordenar(lista) {
+  const hora = a => a.inicio ? new Date(a.inicio).getTime() : Infinity;
+  const regra = (x, y) => hora(x) - hora(y) || (x.par || "").localeCompare(y.par || "")
+    || (x.team || "").localeCompare(y.team || "") || x.jogador.localeCompare(y.jogador, "pt");
+  const todas = [...lista].sort(regra);
+  return { abertas: todas.filter(a => !resolvida(a)), resolvidas: todas.filter(resolvida) };
+}
+function cabecalho(a) {
+  if (!a.par) return "Sem jogo marcado";
+  const [fora, casa] = a.par.split("@");
+  let quando = "";
+  if (a.fase === "vivo") quando = "Ao vivo";
+  else if (a.inicio) {
+    const d = new Date(a.inicio), hoje = new Date();
+    const h = d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+    const amanha = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
+    quando = d.toDateString() === hoje.toDateString() ? h
+           : d.toDateString() === amanha.toDateString() ? `amanhã ${h}`
+           : `${d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" })} ${h}`;
+  }
+  return `${esc(fora)} @ ${esc(casa)}${quando ? `<span>${esc(quando)}</span>` : ""}`;
+}
+
+const LIXO = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
+const COM_SOM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>`;
+const SEM_SOM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>`;
+
+// Cada aposta desliza para a esquerda e mostra dois botões: silenciar / ativar som e remover.
+function cartao(a, mais) {
+  const aberta = S.aberta === a.id;
+  return `<div class="aposta-caixa ${aberta ? "mexe" : ""}" data-id="${a.id}">
+    <div class="acoes-fundo">
+      <button class="acao som ${a.mudo ? "mudo" : ""}" data-id="${a.id}" tabindex="${aberta ? 0 : -1}"
+              aria-label="${a.mudo ? "Voltar a receber" : "Silenciar"} avisos de ${esc(a.jogador)}">${a.mudo ? COM_SOM : SEM_SOM}<span>${a.mudo ? "Ativar som" : "Silenciar"}</span></button>
+      <button class="acao tirar" data-id="${a.id}" tabindex="${aberta ? 0 : -1}"
+              aria-label="Deixar de seguir ${esc(a.jogador)}">${LIXO}<span>Remover</span></button>
+    </div>
+    <div class="aposta ${mais ? "mexeu" : ""} ${aberta ? "aberta" : ""}" data-id="${a.id}">
+      ${foto(a.foto, a.jogador, "foto", a.num)}
+      <div><div class="titulo">${esc(a.jogador)}${a.mudo ? `<span class="mudo-ic" aria-label="silenciado">${SEM_SOM}</span>` : ""}</div>${etiqueta(a)}</div>
+      <button class="mais-acoes" data-id="${a.id}" aria-label="Opções de ${esc(a.jogador)}">⋯</button>
+      <div class="estado">${campo(a)}${progresso(a, mais)}</div>
+    </div>
+  </div>`;
+}
+
+// Em campo / no banco (só nos jogos a decorrer e quando a ESPN tem as substituições).
+const campo = a => a.fase !== "vivo" || a.em_campo == null ? ""
+  : `<span class="campo ${a.em_campo ? "sim" : ""}">${a.em_campo ? "Em campo" : "Banco"}</span>`;
+
+const ABERTO = 172;   // largura dos dois botões
+function arrastarCartao(caixa) {
+  const el = caixa.querySelector(".aposta"), id = +caixa.dataset.id;
+  let x0 = null, y0 = 0, dx = 0, base = 0, horizontal = null;
+  const por = x => { el.style.transform = x ? `translateX(${x}px)` : ""; };
+  el.addEventListener("pointerdown", e => {
+    if (e.target.closest(".mais-acoes")) return;
+    x0 = e.clientX; y0 = e.clientY; dx = 0; horizontal = null;
+    base = S.aberta === id ? -ABERTO : 0; el.classList.add("a-mexer");
+  });
+  el.addEventListener("pointermove", e => {
+    if (x0 == null) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (horizontal == null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) {
+      horizontal = Math.abs(mx) > Math.abs(my);
+      if (horizontal) { S.arrastar = true; fecharOutros(id); caixa.classList.add("mexe"); try { el.setPointerCapture(e.pointerId); } catch (_) {} }
+    }
+    if (!horizontal) return;
+    dx = mx; por(Math.max(-ABERTO - 30, Math.min(0, base + dx)));
+  });
+  const largar = () => {
+    if (x0 == null) return;
+    x0 = null; S.arrastar = false; el.classList.remove("a-mexer");
+    if (!horizontal) {               // toque simples: se estiver aberta, fecha
+      if (S.aberta === id) abrirCartao(caixa, false);
+      return;
+    }
+    abrirCartao(caixa, base + dx < -ABERTO / 2);
+  };
+  el.addEventListener("pointerup", largar); el.addEventListener("pointercancel", largar);
+}
+function abrirCartao(caixa, abrir) {
+  const el = caixa.querySelector(".aposta"), id = +caixa.dataset.id;
+  if (abrir) { fecharOutros(id); vibra(); }
+  S.aberta = abrir ? id : (S.aberta === id ? null : S.aberta);
+  el.style.transform = ""; el.classList.toggle("aberta", abrir);
+  clearTimeout(caixa.t);
+  if (abrir) caixa.classList.add("mexe");
+  else caixa.t = setTimeout(() => caixa.classList.remove("mexe"), 240);   // esconde os botões depois de fechar
+  caixa.querySelectorAll(".acao").forEach(b => b.tabIndex = abrir ? 0 : -1);
+}
+function fecharOutros(id) {
+  document.querySelectorAll(".aposta-caixa").forEach(c => { if (+c.dataset.id !== id) abrirCartao(c, false); });
+}
+
+// Valor atual, ✅/❌ e, em baixo, o jogo e uma barra pequena até à linha.
+function progresso(a, mais) {
+  if ((a.fase === "pre" || a.valor == null) && prestes(a.inicio)) {
+    const jogo = (a.par || "").replace("@", " @ ");
+    return `<div class="mini acomecar">A começar${jogo ? `&ensp;·&ensp;${esc(jogo)}` : ""}</div>`;
+  }
+  if (a.fase === "pre" || a.valor == null) {
+    return esc((a.estado || "").replace(/[🟢🔴🟡🟣🔵⚪⚫🟠🟤]/gu, "").replace(/ {2,}/g, " ").trim());
+  }
+  const jogo = a.jogo ? `<div class="mini ir-jogo ${a.fase === "vivo" ? "vivo" : ""}" data-gid="${esc(a.gid || "")}" role="button" tabindex="0">${esc(a.jogo.fora.tri)} ${a.jogo.fora.score}–${a.jogo.casa.score} ${esc(a.jogo.casa.tri)}&emsp;${esc(a.fase === "fim" ? "Final" : a.jogo.relogio)}</div>` : "";
+  if (a.fase === "inativo") return `<div class="resumo">Não está a jogar</div>${jogo}`;
+  const salto = mais ? `<em class="salto">+${mais}</em>` : "";
+  const fim = a.fase === "fim";
+  const sim = '<span class="icone" aria-label="bateu">✅</span>', nao = '<span class="icone" aria-label="não bateu">❌</span>';
+
+  if (a.alvo_dd) {   // duplo / triplo-duplo
+    const ok = a.valor >= a.alvo_dd;
+    return `<div class="resumo">${esc(a.resumo)}</div>
+      <div class="baixo">${jogo}${medidor(`${a.valor}/${a.alvo_dd}`, salto + (ok ? sim : fim ? nao : ""),
+        barra(a.valor / a.alvo_dd, ok ? "var(--bate)" : fim ? "var(--falha)" : "var(--linha)"))}</div>`;
+  }
+  if (a.alvo == null) {   // sem linha
+    return `<div class="baixo">${jogo}${medidor(a.valor, salto, "")}</div>`;
+  }
+  const passou = a.valor >= a.alvo;
+  let ok, cor = "var(--linha)";
+  if (a.lado === "under") {
+    if (passou) { ok = false; cor = "var(--falha)"; }
+    else if (fim) { ok = true; cor = "var(--bate)"; }
+  } else {
+    if (passou) { ok = true; cor = "var(--bate)"; }
+    else if (fim) { ok = false; cor = "var(--falha)"; }
+  }
+  const icone = ok === true ? sim : ok === false ? nao : "";
+  const fracao = a.lado === "under" && ok === true ? 1 : a.valor / a.alvo;
+  return `<div class="baixo">${jogo}${medidor(`${a.valor}/${a.alvo}`, salto + icone, barra(fracao, cor))}</div>`;
+}
+// Os números ficam mesmo em cima da barra pequena, no canto inferior direito.
+const medidor = (num, extra, barraHtml) =>
+  `<div class="medidor"><div class="num">${extra}<b>${num}</b></div>${barraHtml}</div>`;
+const barra = (fracao, cor) => `<div class="barra-prog"><i style="width:${Math.max(3, Math.min(100, fracao * 100))}%;background:${cor}"></i></div>`;
+
+// Pergunta de confirmação: a do próprio Telegram, ou a do browser fora do Telegram.
+function confirmar(texto) {
+  return new Promise(ok => {
+    try { if (tg && tg.showConfirm) { tg.showConfirm(texto, ok); return; } } catch (e) {}
+    ok(window.confirm(texto));
+  });
+}
+function etiqueta(a) {
+  const nome = nomeStat(a.stat, a.stat_nome);
+  if (a.linha == null) return `<span class="etiqueta sem">${esc(nome)}</span>`;
+  return `<span class="etiqueta ${a.lado === "under" ? "under" : ""}">${a.lado === "under" ? "Under" : "Over"} ${fmt(a.linha)} ${esc(nome)}</span>`;
+}
+function contar() {
+  const c = document.getElementById("conta");
+  c.textContent = S.lista.length; c.classList.toggle("esconder", !S.lista.length);
+}
+
+/* ---------- notificações (o mesmo que chega no chat) ---------- */
+S.notifs = []; S.visto = +(guardado("notif_visto") || 0);
+
+async function verNotifs() {
+  clearTimeout(verNotifs.t);
+  try {
+    const nova = await api("/api/notificacoes");
+    const antes = S.notifs.length ? S.notifs[0].id : null;
+    S.notifs = nova;
+    const ultimo = nova.length ? nova[0].id : 0;
+    if (antes != null && ultimo > antes) { const s = document.getElementById("sino"); s.classList.remove("toca"); void s.offsetWidth; s.classList.add("toca"); }
+    if (S.folha && S.folha.notifs) { S.visto = ultimo; guardar("notif_visto", ultimo); if (!S.arrastar && ultimo !== antes) desenharNotifs(); }
+    marcarNaoLidas();
+  } catch (e) {}
+  verNotifs.t = setTimeout(() => { if (!document.hidden) verNotifs(); else verNotifs.t = null; }, ATUALIZAR);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !verNotifs.t) verNotifs(); });
+
+function marcarNaoLidas() {
+  const n = S.notifs.filter(x => x.id > S.visto).length, el = document.getElementById("naoLidas");
+  el.textContent = n > 9 ? "9+" : n; el.classList.toggle("esconder", !n);
+  document.getElementById("sino").setAttribute("aria-label", n ? `Notificações, ${n} novas` : "Notificações");
+}
+
+function quandoFoi(ts) {
+  const s = Date.now() / 1000 - ts;
+  if (s < 60) return "agora";
+  if (s < 3600) return `há ${Math.floor(s / 60)} min`;
+  const d = new Date(ts * 1000);
+  return (s < 86400 && d.getDate() === new Date().getDate() ? "" : "ontem, ") + d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+}
+// O texto vem do bot em HTML simples: tudo escapado, só o negrito volta.
+const semCores = t => t.replace(/[🟢🔴🟡🟣🔵⚪⚫🟠🟤]/gu, "").split("\n").map(l => l.replace(/ {2,}/g, " ").trim()).filter(Boolean).join("  ·  ");
+const textoNotif = t => esc(t).replace(/&lt;(\/?)b&gt;/g, "<$1b>");
+
+function desenharNotifs() {
+  const lidaAte = S.folha.lidaAte;
+  document.getElementById("folha").innerHTML = `<div class="pega"></div>
+    <div class="notifs-cab"><b>Notificações</b>${S.notifs.length ? `<button id="limparNotifs">Apagar todas</button>` : ""}</div>
+    ${S.notifs.length ? `<p class="notifs-dica">Desliza para a esquerda para apagar.</p>` : ""}
+    ${S.notifs.length ? S.notifs.map(n => {
+      const txt = n.texto.split("\n\n")[0];
+      return `<div class="notif-caixa" data-id="${n.id}"><div class="apagar-fundo">Apagar 🗑️</div><div class="notif ${n.id > lidaAte ? "nova" : ""}">${n.jogador ? foto(n.foto, n.jogador, "foto", n.num) : `<div class="foto rosto" aria-hidden="true"><span>🏀</span></div>`}
+        <div><div class="txt">${textoNotif(txt)}</div>
+        <div class="hora">${quandoFoi(n.ts)}</div></div></div></div>`;
+    }).join("") : `<div class="vazio" style="margin:30px 10px">Ainda não há notificações.<br>Aparecem aqui quando um jogador que segues marca, leva falta ou tem uma stat anulada.</div>`}`;
+  document.querySelectorAll(".notif-caixa").forEach(arrastavel);
+  const limpar = document.getElementById("limparNotifs");
+  if (limpar) limpar.onclick = async () => {
+    if (!await confirmar("Apagar todas as notificações?")) return;
+    try { await api("/api/notificacoes", { method: "DELETE" }); S.notifs = []; vibra("ok"); desenharNotifs(); marcarNaoLidas(); }
+    catch (e) { toast(e.message); }
+  };
+}
+
+// Deslizar para a esquerda: passa de 1/3 da largura (ou um gesto rápido) e apaga.
+function arrastavel(caixa) {
+  const el = caixa.querySelector(".notif");
+  let x0 = null, y0 = 0, dx = 0, t0 = 0, horizontal = null;
+  el.addEventListener("pointerdown", e => { x0 = e.clientX; y0 = e.clientY; dx = 0; t0 = Date.now(); horizontal = null; el.classList.remove("solta"); });
+  el.addEventListener("pointermove", e => {
+    if (x0 == null) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (horizontal == null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) {
+      horizontal = Math.abs(mx) > Math.abs(my);
+      if (horizontal) { S.arrastar = true; try { el.setPointerCapture(e.pointerId); } catch (_) {} }
+    }
+    if (!horizontal) return;
+    dx = Math.min(0, mx); el.style.transform = `translateX(${dx}px)`;
+  });
+  const largar = () => {
+    if (x0 == null) return;
+    x0 = null; S.arrastar = false;
+    const rapido = dx < -40 && Date.now() - t0 < 250;
+    el.classList.add("solta");
+    if (horizontal && (dx < -el.offsetWidth / 3 || rapido)) apagarNotif(caixa, el);
+    else el.style.transform = "";
+  };
+  el.addEventListener("pointerup", largar); el.addEventListener("pointercancel", largar);
+}
+async function apagarNotif(caixa, el) {
+  const id = +caixa.dataset.id;
+  el.style.transform = "translateX(-100%)"; vibra();
+  caixa.style.height = caixa.offsetHeight + "px";
+  requestAnimationFrame(() => { caixa.style.height = "0px"; caixa.style.opacity = "0"; });
+  S.notifs = S.notifs.filter(n => n.id !== id);
+  try { await api("/api/notificacoes/" + id, { method: "DELETE" }); } catch (e) { toast(e.message); }
+  setTimeout(() => { caixa.remove(); if (!S.notifs.length && S.folha && S.folha.notifs) desenharNotifs(); }, 240);
+}
+
+document.getElementById("sino").onclick = () => {
+  vibra();
+  S.folha = { notifs: true, lidaAte: S.visto };
+  S.visto = S.notifs.length ? S.notifs[0].id : S.visto; guardar("notif_visto", S.visto); marcarNaoLidas();
+  document.getElementById("fundo").classList.remove("esconder");
+  const folha = document.getElementById("folha"); folha.classList.remove("esconder");
+  requestAnimationFrame(() => { document.getElementById("fundo").classList.add("aberto"); folha.classList.add("aberto"); });
+  if (tg) tg.BackButton.show();
+  desenharNotifs(); folha.scrollTop = 0;
+};
+
+/* ---------- folha do jogador: estatística, over/under, linha, análise, seguir ---------- */
+function abrirFolha(j) {
+  vibra();
+  S.folha = { ...j, stat: "pts", lado: "over", linha: 19.5, media: null, analise: null };
+  document.getElementById("fundo").classList.remove("esconder");
+  const folha = document.getElementById("folha"); folha.classList.remove("esconder");
+  requestAnimationFrame(() => { document.getElementById("fundo").classList.add("aberto"); folha.classList.add("aberto"); });
+  if (tg) tg.BackButton.show();
+  desenharFolha(); carregarMedia();
+}
+function fecharFolha() {
+  S.folha = null;
+  const fundo = document.getElementById("fundo"), folha = document.getElementById("folha");
+  fundo.classList.remove("aberto"); folha.classList.remove("aberto");
+  setTimeout(() => { fundo.classList.add("esconder"); folha.classList.add("esconder"); }, 220);
+  if (tg && !S.jogo) tg.BackButton.hide();
+}
+document.getElementById("fundo").onclick = fecharFolha;
+
+async function carregarMedia() {
+  const f = S.folha, stat = f.stat;
+  const dd = (S.stats.find(s => s.id === stat) || {}).dd;
+  if (dd) { f.media = null; desenharFolha(); return; }
+  try {
+    const r = await api(`/api/media?jogador=${encodeURIComponent(f.nome)}&stat=${stat}`);
+    if (S.folha !== f || f.stat !== stat) return;
+    f.media = r.media; if (r.linha != null) f.linha = r.linha;
+  } catch (e) { f.media = null; }
+  desenharFolha();
+}
+
+function desenharFolha() {
+  const f = S.folha; if (!f) return;
+  const st = S.stats.find(s => s.id === f.stat) || { nome: f.stat };
+  const temLinha = !st.dd && f.lado !== "sem";
+  const max = Math.max(GRANDES.includes(f.stat) ? 60 : 20, Math.ceil(f.linha) + 5, Math.ceil(f.media || 0) + 5);
+  const pos = v => `${((v - 0.5) / max) * 100}%`;
+  document.getElementById("folha").innerHTML = `
+    <div class="pega"></div>
+    <div class="quem">${foto(f.foto, f.nome, "foto", f.num)}<div><div class="nome">${esc(f.nome)}</div>
+      <div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:6px">${imagem(f.logo, "logo-p")}${esc(f.equipa || "")}</div></div></div>
+
+    <div class="rotulo">Estatística</div>
+    <div class="fichas">${S.stats.map(s => `<button class="ficha" data-s="${s.id}" aria-pressed="${s.id === f.stat}">${esc(nomeStat(s.id, s.nome))}</button>`).join("")}</div>
+
+    ${st.dd ? "" : `
+    <div class="rotulo">Aposta</div>
+    <div class="lados">
+      <button data-lado="over" aria-pressed="${f.lado === "over"}">Over</button>
+      <button data-lado="under" aria-pressed="${f.lado === "under"}">Under</button>
+      <button data-lado="sem" aria-pressed="${f.lado === "sem"}">Sem linha</button>
+    </div>`}
+
+    ${temLinha ? `
+    <div class="linha-caixa">
+      <div class="placar">
+        <button id="menos" aria-label="Linha menos 1">−</button>
+        <div class="numero">${fmt(f.linha)}<small>${f.lado === "under" ? "menos de" : "mais de"} ${fmt(f.linha)} ${esc(st.nome)}</small></div>
+        <button id="maisum" aria-label="Linha mais 1">+</button>
+      </div>
+      <div class="regua">
+        <div class="riscos" style="--um:${100 / max}%; --cinco:${100 / max * 5}%"></div>
+        ${f.media != null ? `<div class="media" style="left:${pos(Math.min(f.media, max))}" data-texto="média ${fmt(f.media)}"></div>` : ""}
+        <input id="regua" type="range" min="0" max="${max - 1}" step="1" value="${f.linha - 0.5}" aria-label="Linha da aposta">
+      </div>
+    </div>` : st.dd ? `<p class="sub" style="margin-top:14px">Avisa quando cada categoria chega aos 10 e quando completa o ${esc(st.nome)}.</p>`
+             : `<p class="sub" style="margin-top:14px">Recebes um aviso a cada ${esc(st.nome)} do jogador, sem linha.</p>`}
+
+    <div class="acoes" style="${temLinha ? "" : "grid-template-columns:1fr"}">
+      ${temLinha ? `<button class="botao" id="verAnalise">📊 Análise</button>` : ""}
+      <button class="botao principal" id="seguir">Seguir</button>
+    </div>
+    <div id="analise">${f.analise ? desenharAnalise(f.analise, f) : ""}</div>`;
+
+  const folha = document.getElementById("folha");
+  folha.querySelectorAll(".ficha").forEach(b => b.onclick = () => { vibra(); f.stat = b.dataset.s; f.analise = null; desenharFolha(); carregarMedia(); });
+  folha.querySelectorAll(".lados button").forEach(b => b.onclick = () => { vibra(); f.lado = b.dataset.lado; desenharFolha(); });
+  const muda = d => { f.linha = Math.max(0.5, f.linha + d); vibra(); desenharFolha(); };
+  if (temLinha) {
+    document.getElementById("menos").onclick = () => muda(-1);
+    document.getElementById("maisum").onclick = () => muda(+1);
+    const r = document.getElementById("regua");
+    r.oninput = () => { f.linha = +r.value + 0.5; vibra();
+      folha.querySelector(".numero").firstChild.textContent = fmt(f.linha);
+      folha.querySelector(".numero small").textContent = `${f.lado === "under" ? "menos de" : "mais de"} ${fmt(f.linha)} ${st.nome}`;
+      if (f.analise) document.getElementById("analise").innerHTML = desenharAnalise(f.analise, f); };
+    r.onchange = () => desenharFolha();
+    document.getElementById("verAnalise").onclick = carregarAnalise;
+  }
+  document.getElementById("seguir").onclick = seguir;
+}
+
+async function carregarAnalise() {
+  const f = S.folha, caixa = document.getElementById("analise");
+  caixa.innerHTML = '<div class="carregar"></div>';
+  try { f.analise = await api(`/api/analise?jogador=${encodeURIComponent(f.nome)}&stat=${f.stat}`); }
+  catch (e) { caixa.innerHTML = `<p class="sub" style="margin-top:14px">${esc(e.message)}</p>`; return; }
+  if (S.folha !== f) return;
+  caixa.innerHTML = desenharAnalise(f.analise, f);
+  caixa.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function desenharAnalise(a, f) {
+  const linha = f.linha, under = f.lado === "under";
+  const bate = v => under ? v < linha : v > linha;
+  const grafico = (titulo, jogos) => {
+    if (!jogos.length) return `<div class="grafico"><div class="cab"><b>${esc(titulo)}</b></div><p class="sub">Sem jogos recentes.</p></div>`;
+    const vmax = Math.max(linha, ...jogos.map(j => j.v)) * 1.2 || 1;
+    const n = jogos.filter(j => bate(j.v)).length;
+    const cor = n * 2 > jogos.length ? "var(--bate)" : n * 2 === jogos.length ? "var(--linha)" : "var(--falha)";
+    return `<div class="grafico">
+      <div class="cab"><b>${esc(titulo)}</b><span style="color:${cor}">${n}/${jogos.length}</span></div>
+      <div class="barras">${jogos.map(j => `<div class="barra ${bate(j.v) ? "bate" : "falha"}" style="height:${Math.max(2, j.v / vmax * 100)}%"><i>${j.v}</i></div>`).join("")}
+        <div class="traco" style="bottom:${linha / vmax * 100}%"></div></div>
+      <div class="rotulos">${jogos.map(j => `<div><b>${esc(j.rot)}</b>${esc(j.data)}</div>`).join("")}</div>
+    </div>`;
+  };
+  const dif = a.min_rec - a.min_ep;
+  return `<div class="analise">
+    ${grafico(`Últimos ${a.ultimos.length} jogos`, a.ultimos)}
+    ${grafico(`Contra ${a.adversario}`, a.contra)}
+    <div class="numeros">
+      <div><b>${a.media ?? "–"}</b>média</div><div><b>${a.mediana ?? "–"}</b>mediana</div>
+      <div><b>${a.min ?? "–"}–${a.max ?? "–"}</b>mín–máx</div>
+      <div><b>${a.min_rec}${Math.abs(dif) >= 1 ? `<small style="font-size:15px"> ${dif > 0 ? "+" : ""}${dif}</small>` : ""}</b>minutos</div>
+    </div>
+    <div class="assinatura">Powered by <b>André Cunha Analytics</b></div>
+  </div>`;
+}
+
+async function seguir() {
+  const f = S.folha, st = S.stats.find(s => s.id === f.stat) || {};
+  const corpo = { jogador: f.nome, stat: f.stat,
+                  linha: st.dd || f.lado === "sem" ? null : f.linha, lado: f.lado === "under" ? "under" : "over" };
+  const b = document.getElementById("seguir"); b.disabled = true;
+  try {
+    const r = await api("/api/seguir", { method: "POST", body: JSON.stringify(corpo) });
+    vibra("ok"); toast(r.repetida ? "Já está na tua lista" : "A seguir. Os avisos chegam no chat.");
+    fecharFolha(); api("/api/lista").then(l => { S.lista = l; contar(); }).catch(() => {});
+  } catch (e) { toast(e.message); b.disabled = false; }
+}
+
+/* ---------- arranque ---------- */
+(async () => {
+  const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+  try { S.stats = (await api("/api/config")).stats; } catch (e) {
+    ecra.innerHTML = `<div class="vazio">${esc(e.message)}</div>`; return;
+  }
+  api("/api/lista").then(l => { S.lista = l; contar(); }).catch(() => {});
+  verJogos();
+  verNotifs();
+})();
+</script>
+</body>
+</html>
